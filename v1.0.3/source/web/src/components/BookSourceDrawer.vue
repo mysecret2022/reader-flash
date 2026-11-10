@@ -1,20 +1,40 @@
 <template>
   <el-drawer
     v-model="visible"
-    title="🔀 智能全网换源"
-    direction="rtl"
-    size="380px"
+    :title="`🔀 智能全网换源`"
+    :direction="drawerDirection"
+    :size="drawerSize"
+    :close-on-click-modal="false"
+    :close-on-press-escape="true"
     :destroy-on-close="false"
+    :with-header="true"
     append-to-body
     class="book-source-drawer"
+    @close="handleClose"
   >
-    <div class="source-drawer-header">
-      <div class="book-meta-bar">
-        <div class="book-title-meta">《{{ bookName }}》</div>
-        <div class="book-author-meta">{{ author || '未知作者' }}</div>
+    <template #header>
+      <div class="custom-drawer-header">
+        <div class="header-main-title">
+          <span class="header-icon">🔀</span>
+          <span class="header-text">智能换源与测速</span>
+        </div>
+        <div class="header-sub-meta">
+          《{{ bookName }}》<span v-if="author"> · {{ author }}</span>
+        </div>
       </div>
-      <div class="drawer-action-row">
-        <span class="source-count-badge">已发现 {{ sourceList.length }} 个源</span>
+    </template>
+
+    <div class="drawer-inner-container">
+      <!-- 顶部信息与一键扫描栏 -->
+      <div class="source-drawer-toolbar">
+        <div class="toolbar-stat">
+          <span class="source-count-pill">
+            已发现 <strong>{{ sourceList.length }}</strong> 个书源
+          </span>
+          <span v-if="scanning" class="live-scanning-badge">
+            <span class="spinner-dot"></span> 正在实时抓取中
+          </span>
+        </div>
         <el-button
           type="primary"
           size="small"
@@ -22,67 +42,82 @@
           @click="startLiveScan"
           class="scan-action-btn"
         >
-          {{ scanning ? '扫描中...' : '⚡ 全网深度测速' }}
+          {{ scanning ? '深度扫描中...' : '⚡ 全网实时测速' }}
         </el-button>
       </div>
-    </div>
 
-    <!-- 换源进度条（仅在扫描时显示） -->
-    <el-progress
-      v-if="scanning"
-      :percentage="scanProgress"
-      :indeterminate="true"
-      :show-text="false"
-      class="scan-progress-bar"
-    />
+      <!-- 换源扫描实时动态进度条 -->
+      <el-progress
+        v-if="scanning"
+        :percentage="scanProgress"
+        :indeterminate="true"
+        :show-text="false"
+        class="scan-progress-bar"
+      />
 
-    <!-- 书源列表 -->
-    <div class="source-scroll-list" v-loading="loadingAvailable && sourceList.length === 0">
-      <div v-if="sourceList.length === 0 && !loadingAvailable && !scanning" class="empty-source-tip">
-        <div class="empty-icon">🔍</div>
-        <p>暂无缓存书源，请点击上方“全网深度测速”扫描</p>
+      <!-- 书源滚动列表区 -->
+      <div class="source-scroll-list" v-loading="loadingAvailable && sourceList.length === 0">
+        <!-- 空状态与提示 -->
+        <div v-if="sourceList.length === 0 && !loadingAvailable && !scanning" class="empty-source-tip">
+          <div class="empty-icon">🔍</div>
+          <div class="empty-main-text">暂无已缓存的书源</div>
+          <p class="empty-sub-text">点击右上角“全网实时测速”即可深度检索全网可用书源并测试延迟</p>
+          <el-button type="primary" size="default" @click="startLiveScan" style="margin-top: 14px;">
+            ⚡ 开始全网深度测速
+          </el-button>
+        </div>
+
+        <!-- 书源卡片项 -->
+        <div
+          v-for="(s, sIdx) in sortedSources"
+          :key="s.bookUrl || sIdx"
+          class="source-card"
+          :class="{
+            'is-active-source': isCurrent(s),
+            'is-switching': switchingUrl === s.bookUrl
+          }"
+          @click="handleSelectSource(s)"
+        >
+          <div class="source-top-line">
+            <div class="source-name-wrap">
+              <span class="source-name-text">{{ s.originName || s.origin || '未知书源' }}</span>
+              <span v-if="isCurrent(s)" class="badge-tag badge-current">当前正在阅读</span>
+              <span v-else class="badge-tag badge-available">可用</span>
+            </div>
+            <div class="source-latency" :class="getLatencyClass(s.time)">
+              {{ s.time ? `⏱ ${s.time}ms` : '🟢 在线' }}
+            </div>
+          </div>
+
+          <div class="source-bottom-line">
+            <span class="latest-chapter-label">最新章节:</span>
+            <span class="latest-chapter-title" :title="s.latestChapterTitle || '暂无目录信息'">
+              {{ s.latestChapterTitle || '暂无目录信息' }}
+            </span>
+          </div>
+
+          <!-- 切换遮罩 -->
+          <div v-if="switchingUrl === s.bookUrl" class="switching-mask">
+            <span class="spinner-mini"></span>
+            <span>正在平滑换源并重置目录...</span>
+          </div>
+        </div>
       </div>
 
-      <div
-        v-for="(s, sIdx) in sortedSources"
-        :key="s.bookUrl || sIdx"
-        class="source-card"
-        :class="{
-          'is-active-source': isCurrent(s),
-          'is-switching': switchingUrl === s.bookUrl
-        }"
-        @click="handleSelectSource(s)"
-      >
-        <div class="source-top-line">
-          <div class="source-name-wrap">
-            <span class="source-name-text">{{ s.originName || s.origin || '未知书源' }}</span>
-            <span v-if="isCurrent(s)" class="badge-tag badge-current">【当前】</span>
-            <span v-else class="badge-tag badge-available">可用</span>
-          </div>
-          <div class="source-latency" :class="getLatencyClass(s.time)">
-            {{ s.time ? `⏱ ${s.time}ms` : '🟢 在线' }}
-          </div>
-        </div>
-
-        <div class="source-bottom-line">
-          <span class="latest-chapter-label">最新:</span>
-          <span class="latest-chapter-title" :title="s.latestChapterTitle || '暂无目录信息'">
-            {{ s.latestChapterTitle || '暂无目录信息' }}
-          </span>
-        </div>
-
-        <div v-if="switchingUrl === s.bookUrl" class="switching-mask">
-          <span class="spinner-mini"></span>
-          <span>正在换源切换...</span>
-        </div>
+      <!-- 底部安全关闭栏 -->
+      <div class="drawer-bottom-bar">
+        <el-button @click="handleClose" class="bottom-close-btn" round>
+          关闭窗口
+        </el-button>
       </div>
     </div>
   </el-drawer>
 </template>
 
 <script setup>
-import { ref, computed, watch, onBeforeUnmount } from 'vue';
-import axios from 'axios';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import request from '../utils/request';
+const axios = request;
 import { ElMessage } from 'element-plus';
 
 const props = defineProps({
@@ -112,12 +147,18 @@ const props = defineProps({
   }
 });
 
-const emit = defineEmits(['update:modelValue', 'change-source']);
+const emit = defineEmits(['update:modelValue', 'change-source', 'closed']);
 
-const visible = computed({
-  get: () => props.modelValue,
-  set: (val) => emit('update:modelValue', val)
-});
+// 内部显隐状态绑定，与父级保持受控单向流动，杜绝意外闪退
+const visible = ref(false);
+
+const isMobile = ref(typeof window !== 'undefined' && window.innerWidth < 640);
+function handleWindowResize() {
+  isMobile.value = typeof window !== 'undefined' && window.innerWidth < 640;
+}
+
+const drawerDirection = computed(() => isMobile.value ? 'btt' : 'rtl');
+const drawerSize = computed(() => isMobile.value ? '88%' : '440px');
 
 const sourceList = ref([]);
 const loadingAvailable = ref(false);
@@ -125,6 +166,28 @@ const scanning = ref(false);
 const scanProgress = ref(0);
 const switchingUrl = ref('');
 let eventSource = null;
+let scanTimeoutTimer = null;
+
+// 双向受控同步
+watch(
+  () => props.modelValue,
+  (newVal) => {
+    visible.value = newVal;
+    if (newVal) {
+      loadCachedSources();
+    } else {
+      stopLiveScan();
+    }
+  },
+  { immediate: true }
+);
+
+function handleClose() {
+  visible.value = false;
+  stopLiveScan();
+  emit('update:modelValue', false);
+  emit('closed');
+}
 
 const sortedSources = computed(() => {
   return [...sourceList.value].sort((a, b) => {
@@ -150,14 +213,6 @@ function getLatencyClass(time) {
   return 'lat-slow';
 }
 
-watch(visible, (isOpened) => {
-  if (isOpened) {
-    loadCachedSources();
-  } else {
-    stopLiveScan();
-  }
-});
-
 async function loadCachedSources() {
   if (!props.bookUrl) return;
   loadingAvailable.value = true;
@@ -174,7 +229,10 @@ async function loadCachedSources() {
       startLiveScan();
     }
   } catch (err) {
-    console.warn('获取已缓存书源失败:', err);
+    console.warn('获取已缓存书源失败，自动触发实时扫描:', err);
+    if (sourceList.value.length === 0) {
+      startLiveScan();
+    }
   } finally {
     loadingAvailable.value = false;
   }
@@ -191,13 +249,18 @@ function startLiveScan() {
   });
 
   const token = localStorage.getItem('accessToken') || localStorage.getItem('userToken') || '';
+  const secureKey = localStorage.getItem('secureKey') || '';
   const queryParams = new URLSearchParams({
+    url: props.bookUrl,
     name: props.bookName,
     author: props.author || '',
     searchSize: '36'
   });
   if (token) {
     queryParams.set('accessToken', token);
+  }
+  if (secureKey) {
+    queryParams.set('secureKey', secureKey);
   }
 
   const sseUrl = `/reader3/searchBookSourceSSE?${queryParams.toString()}`;
@@ -226,7 +289,7 @@ function startLiveScan() {
     };
 
     // 15 秒强制结束扫描防护
-    setTimeout(() => {
+    scanTimeoutTimer = setTimeout(() => {
       stopLiveScan();
     }, 15000);
   } catch (e) {
@@ -238,6 +301,10 @@ function stopLiveScan() {
   if (eventSource) {
     eventSource.close();
     eventSource = null;
+  }
+  if (scanTimeoutTimer) {
+    clearTimeout(scanTimeoutTimer);
+    scanTimeoutTimer = null;
   }
   scanning.value = false;
 }
@@ -255,7 +322,7 @@ async function handleSelectSource(source) {
     const res = await axios.post('/reader3/setBookSource', {
       bookUrl: props.bookUrl,
       newUrl: source.bookUrl,
-      bookSourceUrl: source.origin,
+      bookSourceUrl: source.origin || source.bookSourceUrl || '',
       name: props.bookName,
       author: props.author || ''
     });
@@ -269,7 +336,7 @@ async function handleSelectSource(source) {
         tocUrl: source.tocUrl || '',
         data: res.data.data
       });
-      visible.value = false;
+      handleClose();
     } else {
       ElMessage.error(res.data?.errorMsg || '换源切换失败，请尝试其他书源');
     }
@@ -280,57 +347,104 @@ async function handleSelectSource(source) {
   }
 }
 
+onMounted(() => {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('resize', handleWindowResize);
+  }
+});
+
 onBeforeUnmount(() => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('resize', handleWindowResize);
+  }
   stopLiveScan();
 });
 </script>
 
 <style scoped>
-.book-source-drawer :deep(.el-drawer__body) {
-  padding: 0;
+.custom-drawer-header {
   display: flex;
   flex-direction: column;
-  background: var(--bg-surface, #ffffff);
-  color: var(--text-primary, #1e293b);
+  gap: 2px;
 }
 
-.source-drawer-header {
-  padding: 14px 18px;
-  background: rgba(148, 163, 184, 0.06);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-}
-
-.book-meta-bar {
+.header-main-title {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.book-title-meta {
+  align-items: center;
+  gap: 6px;
   font-size: 16px;
   font-weight: 700;
   color: #0f172a;
 }
 
-.book-author-meta {
-  font-size: 13px;
+.header-sub-meta {
+  font-size: 12px;
   color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.drawer-action-row {
+.drawer-inner-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-surface, #ffffff);
+  color: var(--text-primary, #1e293b);
+}
+
+.source-drawer-toolbar {
+  padding: 12px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: rgba(148, 163, 184, 0.06);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
 }
 
-.source-count-badge {
-  font-size: 12px;
-  color: #64748b;
+.toolbar-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.source-count-pill {
+  font-size: 13px;
+  color: #475569;
+}
+
+.source-count-pill strong {
+  color: #10b981;
+  font-weight: 700;
+}
+
+.live-scanning-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.spinner-dot {
+  width: 6px;
+  height: 6px;
+  background: #3b82f6;
+  border-radius: 50%;
+  animation: pulse-dot 1s infinite alternate;
+}
+
+@keyframes pulse-dot {
+  from { opacity: 0.3; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1.2); }
 }
 
 .scan-action-btn {
   border-radius: 8px;
+  font-weight: 600;
 }
 
 .scan-progress-bar {
@@ -341,7 +455,7 @@ onBeforeUnmount(() => {
 .source-scroll-list {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 14px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -349,20 +463,34 @@ onBeforeUnmount(() => {
 
 .empty-source-tip {
   text-align: center;
-  padding: 40px 20px;
+  padding: 48px 24px;
   color: #94a3b8;
-  font-size: 13px;
 }
 
 .empty-icon {
-  font-size: 32px;
-  margin-bottom: 8px;
+  font-size: 38px;
+  margin-bottom: 10px;
+}
+
+.empty-main-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 6px;
+}
+
+.empty-sub-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #94a3b8;
+  max-width: 280px;
+  margin: 0 auto;
 }
 
 .source-card {
   position: relative;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
   padding: 12px 14px;
   cursor: pointer;
   background: #ffffff;
@@ -392,12 +520,16 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 6px;
+  overflow: hidden;
 }
 
 .source-name-text {
   font-size: 14px;
   font-weight: 600;
   color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .badge-tag {
@@ -405,6 +537,7 @@ onBeforeUnmount(() => {
   padding: 1px 6px;
   border-radius: 4px;
   font-weight: 500;
+  flex-shrink: 0;
 }
 
 .badge-current {
@@ -421,6 +554,7 @@ onBeforeUnmount(() => {
   font-size: 11px;
   font-weight: 600;
   font-family: monospace;
+  flex-shrink: 0;
 }
 
 .lat-fast {
@@ -457,8 +591,8 @@ onBeforeUnmount(() => {
 .switching-mask {
   position: absolute;
   inset: 0;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.85);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -480,5 +614,18 @@ onBeforeUnmount(() => {
 
 @keyframes spin-mini {
   to { transform: rotate(360deg); }
+}
+
+.drawer-bottom-bar {
+  padding: 10px 16px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  display: flex;
+  justify-content: center;
+  background: rgba(248, 250, 252, 0.6);
+}
+
+.bottom-close-btn {
+  width: 100%;
+  max-width: 240px;
 }
 </style>

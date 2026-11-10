@@ -140,7 +140,7 @@
               </span>
               <button
                 class="shelf-change-source-btn"
-                @click.stop="openChangeSourceModal(book)"
+                @click.stop.prevent="openChangeSourceModal(book)"
                 title="全网智能测速换源"
               >
                 🔀 换源
@@ -163,6 +163,7 @@
       :book-url="selectedShelfBook.bookUrl"
       :origin="selectedShelfBook.origin"
       @change-source="handleShelfSourceChanged"
+      @closed="selectedShelfBook = null"
     />
 
     <!-- 移动端专属吸底导航栏 (偏向手机方向优化) -->
@@ -264,9 +265,16 @@ async function handleLogout() {
 }
 
 function openBook(book) {
+  // 如果换源抽屉处于激活或正在关闭中，不进入正文
+  if (showSourceDrawer.value) return;
   router.push({
     path: '/reader',
-    query: { bookUrl: book.bookUrl, name: book.name, origin: book.origin }
+    query: {
+      bookUrl: book.bookUrl,
+      name: book.name,
+      origin: book.origin,
+      author: book.author || ''
+    }
   });
 }
 

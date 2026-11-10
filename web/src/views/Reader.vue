@@ -17,7 +17,7 @@
         <div class="top-actions">
           <button
             class="icon-btn source-btn-pill"
-            @click.stop="showBookSourceDrawer = true"
+            @click.stop.prevent="openSourceDrawer"
             title="全网智能测速换源"
           >
             🔀 换源
@@ -63,7 +63,7 @@
         <div class="state-desc">{{ catalogError }}</div>
         <div class="state-btns">
           <el-button type="primary" :loading="catalogLoading" @click="loadChapterCatalog">🔄 重新抓取</el-button>
-          <el-button type="warning" @click="showBookSourceDrawer = true">🔀 立即换源</el-button>
+          <el-button type="warning" @click.stop.prevent="openSourceDrawer">🔀 立即换源</el-button>
           <el-button @click="goBack">‹ 返回书架</el-button>
         </div>
       </div>
@@ -225,7 +225,7 @@
         <!-- 底部核心功能导航：目录、换源、排版设置、重载 -->
         <div class="bottom-footer-actions">
           <el-button text @click="showCatalogDrawer = true">📑 目录索引</el-button>
-          <el-button text type="primary" @click="showBookSourceDrawer = true">🔀 智能换源</el-button>
+          <el-button text type="primary" @click.stop.prevent="openSourceDrawer">🔀 智能换源</el-button>
           <el-button text @click="showSettingsDrawer = true">⚙️ 排版设置</el-button>
           <el-button text @click="refreshCurrentChapter">🔄 重新加载</el-button>
         </div>
@@ -308,7 +308,7 @@
 
     <!-- 常驻智能操作浮条 (在控制栏收起时贴心浮现，1键即开换源、设置与菜单，防止用户找不到入口) -->
     <div v-if="!showControls" class="floating-quick-bar" @click.stop>
-      <button class="float-pill-btn primary" @click.stop="showBookSourceDrawer = true" title="快速换源">
+      <button class="float-pill-btn primary" @click.stop.prevent="openSourceDrawer" title="快速换源">
         🔀 换源
       </button>
       <button class="float-pill-btn" @click.stop="showSettingsDrawer = true" title="排版与主题设置">
@@ -573,7 +573,17 @@ function onTouchEnd(e) {
   }
 }
 
+function hasActiveDrawerOrModal() {
+  return showBookSourceDrawer.value || showSettingsDrawer.value || showCatalogDrawer.value || showQuoteModal.value || showOfflineModal.value || showStatsModal.value;
+}
+
+function openSourceDrawer() {
+  showBookSourceDrawer.value = true;
+}
+
 function handlePageTapArea(e) {
+  // 如果当前已有抽屉或弹窗打开，禁止误触翻页或控制栏
+  if (hasActiveDrawerOrModal()) return;
   // 如果刚发生过滑动操作，忽略附带的 click
   if (isSwipeAction) {
     isSwipeAction = false;
@@ -598,6 +608,7 @@ function handlePageTapArea(e) {
 }
 
 function handleScrollModeClick(e) {
+  if (hasActiveDrawerOrModal()) return;
   if (selectedText.value) return;
   statsStore.recordActivity();
   showControls.value = !showControls.value;
@@ -824,6 +835,7 @@ function saveProgress(idx) {
 }
 
 function handleContainerClick(e) {
+  if (hasActiveDrawerOrModal()) return;
   if (selectedText.value) return;
   statsStore.recordActivity();
   // 点击页面空白处或边缘时切换控制栏

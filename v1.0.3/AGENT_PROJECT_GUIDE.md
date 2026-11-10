@@ -52,12 +52,18 @@
     - 针对首页伪装 200 但实际为清空服务器（如 Apache/Nginx `404 Not Found: The requested URL was not found on this server`），进行指纹识别标记失效；
     - 针对首页 404 但其内部搜索与分类接口正常工作（如独步小说 `dbxsn.com`）的书源，阶段 1 / 阶段 2 实测可搜出小说，正确判定为存活，绝不误杀！
 
-### 2.3 严控内存占用与双层资源熔断机制 (JVM & Container Memory Governance)
-- **优化背景**：现代 JVM 默认按宿主机物理内存的 25% 动态分配堆内存。在 16G/32G 宿主机或软路由、NAS 上，容易因无上限膨胀导致占用过高。
-- **解决方案与双层防护**：
-  1. **JVM 运行时软上限**：
-     - 在 `entrypoint.sh`、`docker-compose.yml`、`startup.sh`、`startup.cmd` 中全局注入默认内存限制：初始堆 `-Xms128m`，最大堆 `-Xmx512m`；
-     - 启用现代化垃圾回收器 `-XX:+UseG1GC` 与容器感知 `-XX:+UseContainerSupport`，短时并发激增后及时高效释放内存，平稳回落至低内存区间。
+### 2.4 全网智能换源抽屉“闪退/秒关”根因彻底修复与移动端手势适配 (Change Source Drawer Fix)
+- **用户反馈**：换源功能点击后“直接闪了一下就消失了”，无法正常唤出书源列表进行换源切换。
+- **根因分析**：
+  1. **遮罩层点击冲突 (Close-On-Click-Modal)**：Element Plus `el-drawer` 默认开启 `:close-on-click-modal="true"` 并在 `body` 上挂载全局遮罩层。在移动设备触摸（touch）或桌面快速点击时，点击事件冒泡至新挂载的遮罩层，导致组件判定为“点击外部区域”瞬间触发关闭（秒关/闪退）。
+  2. **SSE 换源接口缺少 `url` 参数拦截报错**：后端 `/reader3/searchBookSourceSSE` 强制校验 `bookUrl` 参数（`if (bookUrl.isNullOrEmpty()) response.write("event: error")`），而旧版换源前端发起 SSE 仅传了 `name` 与 `author`，漏传了书籍链接 `url`，导致后端直接返回报错事件并中断流。
+  3. **认证凭据丢失**：`BookSourceDrawer.vue` 误直接使用裸 `import axios from 'axios'`，缺少带拦截器注入 `accessToken` 和 `secureKey` 的封装请求对象，触发未登录鉴权失败。
+  4. **全屏点击与手势穿透冲突**：阅读页根视口与左右滑动翻页均监听了区域点击，在抽屉展开瞬间若有事件穿透会触发控制栏切换与翻页干扰。
+- **修复与加固实现**：
+  1. **关闭误触屏蔽**：配置 `:close-on-click-modal="false"` 与 `:destroy-on-close="false"`，抽屉仅在用户主动点击顶部 `✕` 或底部“关闭窗口”按钮、以及按 Escape 键时平滑收起，杜绝任何形式的被动意外闪退。
+  2. **参数与认证链路齐备**：换源抽屉改用标准封装 `request` 携带登录凭据；SSE 全网测速请求完整注入 `{ url: props.bookUrl, name, author, searchSize, accessToken, secureKey }`，完美命中后端实时抓取接口。
+  3. **自适应移动端与桌面端**：手机端（屏幕宽度 < 640px）自适应从底部向上滑出（`btt`，APP 级底栏交互），桌面端从右向左滑出（`rtl`），尺寸动态适配不溢出。
+  4. **全局防冲突门禁**：在 `Reader.vue` 的 `handleContainerClick` 与 `handlePageTapArea` 中增加 `hasActiveDrawerOrModal()` 校验，在换源或设置抽屉处于展开状态时，全面抑制正文翻页与控制栏展开逻辑。
   2. **Docker 容器硬件级硬熔断**：
      - 在 `docker-compose.yml` 中配置 `deploy.resources.limits.memory: 768M`，将包括 JVM 堆外内存与 Edge TTS 微服务在内的整个容器总内存封顶在 768MB，彻底防止极端情况下挤占宿主机资源。
 
