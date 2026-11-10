@@ -61,11 +61,29 @@
   2. **Docker 容器硬件级硬熔断**：
      - 在 `docker-compose.yml` 中配置 `deploy.resources.limits.memory: 768M`，将包括 JVM 堆外内存与 Edge TTS 微服务在内的整个容器总内存封顶在 768MB，彻底防止极端情况下挤占宿主机资源。
 
+### 2.4 全网智能换源、原生App级左右滑动与 3D 仿真白屏彻底修复
+- **智能换源生态全面还原**：
+  - 新建 `BookSourceDrawer.vue` 智能换源抽屉，支持快速调取已探知书源（`/reader3/getAvailableBookSource`）与全网 SSE 流式秒级并发测速（`/reader3/searchBookSourceSSE`）；
+  - 在阅读页顶部显目位置加入【🔀 换源】入口，支持从当前章节直接对齐切换新源（`/reader3/setBookSource`）；
+  - 在书架卡片操作区同步支持【🔀 换源】，换源后即刻自动刷新书架数据。
+- **正文排版对齐官方 reader 库设计**：
+  - 新建 `ReadSettingsDrawer.vue` 排版偏好抽屉，移植原版 reader 7 款经典护眼底色（米白、羊皮、护眼绿、海蓝、暖粉、素灰、纯黑夜间）；
+  - 支持字号微调（12~36px）、字重（400常规/600加粗）、行高（1.2~3.0）、段间距、大屏版心宽度（640/800/960/1200px）调节；
+  - 白噪音伴读模块移出常驻底部栏，收纳至排版偏好中供用户自主在后台开关，彻底净化主屏。
+- **3D 仿真白屏修复与原生App级触控手势**：
+  - 修复仿真翻页容器未声明宽高与底色导致的白屏缺陷，注入 3D 透视（`perspective: 1600px`）与纸张翻折阴影；
+  - 增加真·手机阅读 App 手势：
+    - 左右轻扫（`|deltaX| > 35px`）平滑切页/切章；
+    - 屏幕左侧 30% 点击翻上一页，右侧 30% 翻下一页，中轴 40% 呼出控制栏；
+    - 支持横向动态拖拽跟手位移与顺畅回弹。
+
 ---
 
 ## 3. 架构与核心文件指引
 - `web/src/views/Reader.vue`: 现代化阅读核心，包含未入架小说实时抓取解析、加入书架、零白屏状态卡片、3D仿真/滚动翻页、多角色拟人听书、白噪音伴读。
 - `web/src/views/Index.vue`: 移动端深度优化书架与找书面板，支持流式搜书卡片一键即时预览与快速入架。
 - `web/src/views/Admin.vue`: 控制台后台治理中心，8 线程并发三阶段深度体检与无损书源管理。
+- `web/src/components/BookSourceDrawer.vue`: 全网智能测速换源抽屉，毫秒级响应展示与无缝切源。
+- `web/src/components/ReadSettingsDrawer.vue`: 经典阅读排版与护眼配色设置中心，收纳白噪音自主开关。
 - `src/main/java/com/htmake/reader/api/controller/BookController.kt`: 书籍抓取、章节列表、目录解析与正文获取控制器。
 - `src/main/java/com/htmake/reader/api/controller/BookSourceController.kt`: 书源保存、健康检查探针与远程书源获取。

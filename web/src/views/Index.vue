@@ -134,8 +134,17 @@
           <div class="shelf-book-info">
             <div class="shelf-book-title" :title="book.name">{{ book.name }}</div>
             <div class="shelf-book-author">{{ book.author || '未知作者' }}</div>
-            <div class="shelf-book-progress">
-              读至: {{ book.durChapterTitle || '第一章' }}
+            <div class="shelf-book-bottom-row">
+              <span class="shelf-book-progress">
+                读至: {{ book.durChapterTitle || '第一章' }}
+              </span>
+              <button
+                class="shelf-change-source-btn"
+                @click.stop="openChangeSourceModal(book)"
+                title="全网智能测速换源"
+              >
+                🔀 换源
+              </button>
             </div>
           </div>
         </div>
@@ -144,6 +153,17 @@
 
     <!-- 个人阅读数据与成就弹窗 -->
     <ReadingStatsModal v-model="showStatsModal" />
+
+    <!-- 书架换源抽屉 -->
+    <BookSourceDrawer
+      v-if="selectedShelfBook"
+      v-model="showSourceDrawer"
+      :book-name="selectedShelfBook.name"
+      :author="selectedShelfBook.author"
+      :book-url="selectedShelfBook.bookUrl"
+      :origin="selectedShelfBook.origin"
+      @change-source="handleShelfSourceChanged"
+    />
 
     <!-- 移动端专属吸底导航栏 (偏向手机方向优化) -->
     <nav class="mobile-bottom-nav">
@@ -177,6 +197,7 @@ import { useRouter } from 'vue-router';
 import { useBookStore } from '../stores/book';
 import { useOfflineStore } from '../stores/offline';
 import ReadingStatsModal from '../components/ReadingStatsModal.vue';
+import BookSourceDrawer from '../components/BookSourceDrawer.vue';
 import defaultCover from '../assets/imgs/noCover.jpeg';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
@@ -186,6 +207,17 @@ const offlineStore = useOfflineStore();
 
 const searchQuery = ref('');
 const showStatsModal = ref(false);
+const showSourceDrawer = ref(false);
+const selectedShelfBook = ref(null);
+
+function openChangeSourceModal(book) {
+  selectedShelfBook.value = book;
+  showSourceDrawer.value = true;
+}
+
+function handleShelfSourceChanged() {
+  bookStore.fetchBookshelf();
+}
 
 const currentUsername = computed(() => {
   try {
@@ -598,12 +630,39 @@ onMounted(async () => {
   margin-bottom: 4px;
 }
 
+.shelf-book-bottom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 4px;
+}
+
 .shelf-book-progress {
   font-size: 10px;
   color: #64748b;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+}
+
+.shelf-change-source-btn {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.shelf-change-source-btn:hover {
+  background: #10b981;
+  color: #fff;
 }
 
 .empty-shelf {

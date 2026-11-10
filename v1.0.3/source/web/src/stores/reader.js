@@ -8,12 +8,14 @@ export const useReaderStore = defineStore('reader', {
   state: () => {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     return {
-      theme: saved.theme !== undefined ? saved.theme : 0, // 0白天, 1羊皮纸, 2护眼绿, 3暗黑
-      fontId: saved.fontId !== undefined ? saved.fontId : 0, // 默认系统原生字体(0MB)
+      theme: saved.theme !== undefined ? saved.theme : 0, // 0米白, 1羊皮纸, 2护眼绿, 3海蓝, 4暖粉, 5素灰, 6夜间黑
+      fontId: saved.fontId !== undefined ? saved.fontId : 0, // 0系统, 1霞鹜文楷, 2思源宋体, 3毛笔手写
       fontSize: saved.fontSize || 18,
       lineHeight: saved.lineHeight || 1.8,
       paragraphSpacing: saved.paragraphSpacing || 16,
-      pageMode: saved.pageMode || 'simulation', // 'scroll' | 'slide' | 'simulation'
+      readWidth: saved.readWidth || 800, // 桌面正文最大宽度 (640, 800, 960, 100%全屏)
+      fontWeight: saved.fontWeight || 400, // 字重 (400常规, 600加粗)
+      pageMode: saved.pageMode || 'slide', // 'slide'(左右滑动) | 'simulation'(3D仿真) | 'scroll'(上下滚动)
       ambientTrack: null,
       ambientVolume: saved.ambientVolume !== undefined ? saved.ambientVolume : 0.5,
       ttsVoice: saved.ttsVoice || 'zh-CN-YunxiNeural',
@@ -24,9 +26,9 @@ export const useReaderStore = defineStore('reader', {
 
   actions: {
     saveSettings() {
-      const { theme, fontId, fontSize, lineHeight, paragraphSpacing, pageMode, ambientVolume, ttsVoice, ttsSpeed, autoCleanAd } = this;
+      const { theme, fontId, fontSize, lineHeight, paragraphSpacing, readWidth, fontWeight, pageMode, ambientVolume, ttsVoice, ttsSpeed, autoCleanAd } = this;
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        theme, fontId, fontSize, lineHeight, paragraphSpacing, pageMode, ambientVolume, ttsVoice, ttsSpeed, autoCleanAd
+        theme, fontId, fontSize, lineHeight, paragraphSpacing, readWidth, fontWeight, pageMode, ambientVolume, ttsVoice, ttsSpeed, autoCleanAd
       }));
     },
 
@@ -53,6 +55,16 @@ export const useReaderStore = defineStore('reader', {
 
     setParagraphSpacing(ps) {
       this.paragraphSpacing = ps;
+      this.saveSettings();
+    },
+
+    setReadWidth(w) {
+      this.readWidth = w;
+      this.saveSettings();
+    },
+
+    setFontWeight(fw) {
+      this.fontWeight = fw;
       this.saveSettings();
     },
 

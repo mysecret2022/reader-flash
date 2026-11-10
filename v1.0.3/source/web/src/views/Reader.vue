@@ -3,12 +3,11 @@
     class="reader-page"
     :class="[`reader-theme-${readerStore.theme}`]"
     :style="readerStyle"
-    @click="handleContainerClick"
     @keydown="handleKeyDown"
     tabindex="0"
     ref="readerContainer"
   >
-    <!-- 顶部状态栏信息 (书名、章节名、离线标记、加入书架) -->
+    <!-- 顶部状态栏信息 (返回、书名、换源、加入书架、离线标记、阅读统计) -->
     <header class="reader-top-bar" :class="{ 'bar-visible': showControls }">
       <div class="top-bar-content matte-control-panel">
         <button class="icon-btn" @click.stop="goBack">‹ 返回</button>
@@ -16,6 +15,13 @@
           {{ bookName }} - {{ currentChapter?.title || (catalogLoading ? '正在解析目录...' : '目录加载完成') }}
         </span>
         <div class="top-actions">
+          <button
+            class="icon-btn source-btn-pill"
+            @click.stop="showBookSourceDrawer = true"
+            title="全网智能测速换源"
+          >
+            🔀 换源
+          </button>
           <button
             v-if="!isInBookshelf"
             class="icon-btn shelf-add-pill"
@@ -37,8 +43,10 @@
     <!-- 正文展示核心区 -->
     <main
       class="reader-content-viewport"
+      :class="{ 'is-paginated': readerStore.pageMode !== 'scroll' }"
       @mouseup="handleSelectionChange"
       @touchend="handleSelectionChange"
+      @click="handleContainerClick"
     >
       <!-- 状态 1：正在从目标源抓取解析小说目录 -->
       <div v-if="catalogLoading" class="reader-state-card reader-loading">
@@ -48,14 +56,15 @@
         <div v-if="origin" class="state-origin">书源目标源：{{ origin }}</div>
       </div>
 
-      <!-- 状态 2：抓取失败，提示友好错误信息并提供重试与返回，杜绝白屏 -->
+      <!-- 状态 2：抓取失败，提示友好错误信息并提供重试与换源，杜绝白屏 -->
       <div v-else-if="catalogError && chapterList.length === 0" class="reader-state-card reader-error-state">
         <div class="error-emoji">⚠️</div>
-        <div class="state-title">无法从目标源解析此书籍</div>
+        <div class="state-title">无法从当前书源解析此书籍</div>
         <div class="state-desc">{{ catalogError }}</div>
         <div class="state-btns">
           <el-button type="primary" :loading="catalogLoading" @click="loadChapterCatalog">🔄 重新抓取</el-button>
-          <el-button @click="goBack">‹ 返回书架 / 更换书源</el-button>
+          <el-button type="warning" @click="showBookSourceDrawer = true">🔀 立即换源</el-button>
+          <el-button @click="goBack">‹ 返回书架</el-button>
         </div>
       </div>
 
@@ -67,7 +76,12 @@
       </div>
 
       <!-- 状态 4：模式 1 - 平滑上下滚动模式 -->
-      <div v-else-if="readerStore.pageMode === 'scroll'" class="scroll-mode-container" ref="scrollContainer">
+      <div
+        v-else-if="readerStore.pageMode === 'scroll'"
+        class="scroll-mode-container"
+        ref="scrollContainer"
+        :style="{ maxWidth: `${readerStore.readWidth || 800}px` }"
+      >
         <h2 class="chapter-heading">{{ currentChapter?.title }}</h2>
         <div class="chapter-body">
           <p
@@ -84,23 +98,82 @@
         </div>
       </div>
 
-      <!-- 状态 5：模式 2 - 3D 纸张仿真翻页 / 左右翻页模式 -->
-      <div v-else class="simulation-flip-container" @click="handlePageFlipClick">
-        <div class="simulation-page-sheet" :class="[`reader-theme-${readerStore.theme}`]">
-          <div class="page-header">{{ currentChapter?.title }}</div>
+      <!-- 状态 5：模式 2 - APP级 左右滑动模式 (真·手机阅读APP手势与触控反馈) -->
+      <div
+        v-else-if="readerStore.pageMode === 'slide'"
+        class="app-flip-viewport slide-flip-container"
+        @touchstart="onTouchStart"
+        @touchmove="onTouchMove"
+        @touchend="onTouchEnd"
+        @click="handlePageTapArea"
+      >
+        <div
+          class="slide-page-sheet"
+          :class="[`reader-theme-${readerStore.theme}`]"
+          :style="slideSheetStyle"
+        >
+          <div class="page-header">
+            <span class="header-chap-title">{{ currentChapter?.title }}</span>
+            <span class="header-clock">{{ currentTimeStr }}</span>
+          </div>
+
           <div class="page-content-box">
             <p
-              v-for="(para, pIdx) in paragraphList"
+              v-for="(para, pIdx) in currentPageParas"
               :key="pIdx"
-              :class="{ 'speaking-highlight': currentSpeakingIndex === pIdx }"
+              :class="{ 'speaking-highlight': isSpeakingThisPara(para) }"
             >
               {{ para }}
             </p>
           </div>
+
           <div class="page-footer">
-            <span>第 {{ currentIndex + 1 }} / {{ chapterList.length }} 章</span>
-            <span>reader-flash 极速看书</span>
+            <span class="footer-left">第 {{ currentPageIndex + 1 }} / {{ totalPages }} 页</span>
+            <span class="footer-right">第 {{ currentIndex + 1 }}/{{ chapterList.length }} 章 · {{ chapterProgress }}%</span>
           </div>
+        </div>
+      </div>
+
+      <!-- 状态 6：模式 3 - 3D 纸张拟真仿真翻页 (彻底消除白屏，带真实立体纸张翻折阴影) -->
+      <div
+        v-else
+        class="app-flip-viewport simulation-flip-container"
+        @touchstart="onTouchStart"
+        @touchmove="onTouchMove"
+        @touchend="onTouchEnd"
+        @click="handlePageTapArea"
+      >
+        <div
+          class="simulation-page-sheet"
+          :class="[
+            `reader-theme-${readerStore.theme}`,
+            { 'flipping-forward': isFlipping3D && flipDirection === 'next' },
+            { 'flipping-backward': isFlipping3D && flipDirection === 'prev' }
+          ]"
+          :style="simulationSheetStyle"
+        >
+          <div class="page-header">
+            <span class="header-chap-title">{{ currentChapter?.title }}</span>
+            <span class="header-clock">{{ currentTimeStr }}</span>
+          </div>
+
+          <div class="page-content-box">
+            <p
+              v-for="(para, pIdx) in currentPageParas"
+              :key="pIdx"
+              :class="{ 'speaking-highlight': isSpeakingThisPara(para) }"
+            >
+              {{ para }}
+            </p>
+          </div>
+
+          <div class="page-footer">
+            <span class="footer-left">第 {{ currentPageIndex + 1 }} / {{ totalPages }} 页 (3D仿真)</span>
+            <span class="footer-right">第 {{ currentIndex + 1 }}/{{ chapterList.length }} 章 · {{ chapterProgress }}%</span>
+          </div>
+
+          <!-- 仿真 3D 纸张背光与立体折角阴影 -->
+          <div class="simulation-shadow-layer" :class="{ active: isFlipping3D }"></div>
         </div>
       </div>
     </main>
@@ -133,66 +206,27 @@
           </el-button>
         </div>
 
-        <!-- 白噪音伴读模块 -->
-        <AmbientPlayer />
-
-        <!-- 样式控制区（字体选择、主题配色、字号与翻页模式） -->
-        <div class="settings-grid">
-          <!-- 主题 4 色切换 -->
-          <div class="setting-item">
-            <span class="setting-label">阅读底色</span>
-            <div class="theme-buttons">
-              <button
-                v-for="t in themes"
-                :key="t.id"
-                class="theme-color-btn"
-                :class="[`theme-btn-${t.id}`, { active: readerStore.theme === t.id }]"
-                @click="readerStore.setTheme(t.id)"
-                :title="t.name"
-              />
-            </div>
-          </div>
-
-          <!-- 动态分片字体切换 (按需下载) -->
-          <div class="setting-item">
-            <span class="setting-label">排版字体</span>
-            <el-select
-              v-model="readerStore.fontId"
-              size="small"
-              style="width: 140px;"
-              @change="readerStore.setFont"
-            >
-              <el-option
-                v-for="f in FONT_OPTIONS"
-                :key="f.id"
-                :label="f.name"
-                :value="f.id"
-              />
-            </el-select>
-          </div>
-
-          <!-- 翻页模式选择 -->
-          <div class="setting-item">
-            <span class="setting-label">翻页模式</span>
-            <el-radio-group v-model="readerStore.pageMode" size="small" @change="readerStore.setPageMode">
-              <el-radio-button label="simulation">3D 仿真</el-radio-button>
-              <el-radio-button label="scroll">平滑滚动</el-radio-button>
-            </el-radio-group>
-          </div>
-
-          <!-- 字号与行距调节 -->
-          <div class="setting-item font-size-ctrl">
-            <span class="setting-label">字号</span>
-            <el-button size="small" @click="readerStore.setFontSize(readerStore.fontSize - 1)">A-</el-button>
-            <span class="size-val">{{ readerStore.fontSize }}</span>
-            <el-button size="small" @click="readerStore.setFontSize(readerStore.fontSize + 1)">A+</el-button>
+        <!-- 快捷主题配色切换条 (7款 reader 经典配色) -->
+        <div class="quick-themes-row">
+          <div
+            v-for="t in THEMES"
+            :key="t.id"
+            class="theme-color-pill"
+            :class="{ active: readerStore.theme === t.id }"
+            :style="{ background: t.bg, borderColor: t.border }"
+            @click="readerStore.setTheme(t.id)"
+            :title="t.name"
+          >
+            <span class="pill-dot" :style="{ background: t.color }"></span>
           </div>
         </div>
 
-        <!-- 目录与书源调试抽屉按钮 -->
+        <!-- 底部核心功能导航：目录、换源、排版设置、重载 -->
         <div class="bottom-footer-actions">
           <el-button text @click="showCatalogDrawer = true">📑 目录索引</el-button>
-          <el-button text @click="refreshCurrentChapter">🔄 重新加载本章</el-button>
+          <el-button text type="primary" @click="showBookSourceDrawer = true">🔀 智能换源</el-button>
+          <el-button text @click="showSettingsDrawer = true">⚙️ 排版设置</el-button>
+          <el-button text @click="refreshCurrentChapter">🔄 重新加载</el-button>
         </div>
       </div>
     </footer>
@@ -211,7 +245,7 @@
     <!-- 侧边平滑目录抽屉 -->
     <el-drawer
       v-model="showCatalogDrawer"
-      title="📑 目录"
+      title="📑 目录索引"
       direction="ltr"
       size="320px"
       append-to-body
@@ -226,7 +260,7 @@
         />
         <div class="chapter-list">
           <div
-            v-for="(chap, idx) in filteredChapters"
+            v-for="chap in filteredChapters"
             :key="chap.index"
             class="chapter-item"
             :class="{ active: chap.index === currentIndex }"
@@ -239,6 +273,19 @@
       </div>
     </el-drawer>
 
+    <!-- 智能全网换源抽屉 -->
+    <BookSourceDrawer
+      v-model="showBookSourceDrawer"
+      :book-name="bookName"
+      :author="author"
+      :book-url="bookUrl"
+      :origin="origin"
+      @change-source="handleSourceChanged"
+    />
+
+    <!-- 排版设置与偏好抽屉 (含白噪音自主开启入口) -->
+    <ReadSettingsDrawer v-model="showSettingsDrawer" />
+
     <!-- 弹窗组件：唯美书摘卡片生成器 -->
     <QuoteCardModal
       v-model="showQuoteModal"
@@ -250,12 +297,12 @@
     <!-- 弹窗组件：全本 PWA 离线缓存 -->
     <OfflineDownloadModal
       v-model="showOfflineModal"
-      :book="{ bookUrl, name: bookName }"
+      :book-url="bookUrl"
+      :book-name="bookName"
       :chapter-list="chapterList"
-      :current-index="currentIndex"
     />
 
-    <!-- 弹窗组件：个人阅读统计与成就 -->
+    <!-- 弹窗组件：阅读统计与阅读时长勋章 -->
     <ReadingStatsModal v-model="showStatsModal" />
   </div>
 </template>
@@ -268,8 +315,8 @@ const axios = request;
 import { useReaderStore } from '../stores/reader';
 import { useStatsStore } from '../stores/stats';
 import { useOfflineStore } from '../stores/offline';
-import { FONT_OPTIONS } from '../utils/fontLoader';
-import AmbientPlayer from '../components/AmbientPlayer.vue';
+import BookSourceDrawer from '../components/BookSourceDrawer.vue';
+import ReadSettingsDrawer from '../components/ReadSettingsDrawer.vue';
 import QuoteCardModal from '../components/QuoteCardModal.vue';
 import OfflineDownloadModal from '../components/OfflineDownloadModal.vue';
 import ReadingStatsModal from '../components/ReadingStatsModal.vue';
@@ -294,10 +341,11 @@ const chapterContent = ref('');
 const loading = ref(false);
 const catalogLoading = ref(false);
 const catalogError = ref('');
-const contentError = ref('');
 
 const showControls = ref(false);
 const showCatalogDrawer = ref(false);
+const showBookSourceDrawer = ref(false);
+const showSettingsDrawer = ref(false);
 const showQuoteModal = ref(false);
 const showOfflineModal = ref(false);
 const showStatsModal = ref(false);
@@ -306,19 +354,32 @@ const catalogFilter = ref('');
 const selectedText = ref('');
 const bubblePos = ref({ x: 0, y: 0 });
 
+// 分页与手势状态 (APP级体验核心)
+const currentPageIndex = ref(0);
+const touchDragX = ref(0);
+const isTouching = ref(false);
+const isFlipping3D = ref(false);
+const flipDirection = ref('next');
+const currentTimeStr = ref('');
+
+let clockInterval = null;
+let statsTimer = null;
+
+// 7 款 reader 官方原版经典护眼底色
+const THEMES = [
+  { id: 0, name: '雅致米白', bg: '#faf5eb', color: '#262626', border: '#e8dec8' },
+  { id: 1, name: '复古羊皮', bg: '#f5eacd', color: '#332a1e', border: '#e6d3a5' },
+  { id: 2, name: '清新护眼', bg: '#e6f2e6', color: '#1c301c', border: '#cce2cc' },
+  { id: 3, name: '淡雅海蓝', bg: '#e4f1f5', color: '#1f2d33', border: '#c7e0e8' },
+  { id: 4, name: '暖粉少女', bg: '#f5e4e4', color: '#382323', border: '#e8c9c9' },
+  { id: 5, name: '素灰静读', bg: '#e0e0e0', color: '#222222', border: '#cccccc' },
+  { id: 6, name: '纯黑夜间', bg: '#121212', color: '#8c8c8c', border: '#2a2a2a' }
+];
+
 // 听书与多角色广播剧
 const isSpeaking = ref(false);
 const currentSpeakingIndex = ref(-1);
 let speechUtterance = null;
-let statsTimer = null;
-
-const themes = [
-  { id: 0, name: '象牙白' },
-  { id: 1, name: '羊皮纸' },
-  { id: 2, name: '护眼绿' },
-  { id: 3, name: '深邃夜' },
-  { id: 4, name: '水墨灰' }
-];
 
 const currentChapter = computed(() => {
   return chapterList.value[currentIndex.value] || null;
@@ -345,19 +406,217 @@ const paragraphList = computed(() => {
     .filter(p => p.length > 0);
 });
 
+// 动态分页计算：根据屏幕与正文字号计算每页容量，优雅切片
+const charsPerPage = computed(() => {
+  const fs = readerStore.fontSize || 18;
+  const lh = readerStore.lineHeight || 1.8;
+  const ps = readerStore.paragraphSpacing || 16;
+  const width = Math.min(window.innerWidth - 48, readerStore.readWidth || 800);
+  const height = window.innerHeight - 130;
+  const cols = Math.floor(width / (fs + 2));
+  const rows = Math.floor(height / (fs * lh + ps / 2));
+  return Math.max(220, cols * rows);
+});
+
+const chapterPages = computed(() => {
+  if (!paragraphList.value || paragraphList.value.length === 0) return [[]];
+  const pages = [];
+  let cur = [];
+  let count = 0;
+  const maxChars = charsPerPage.value;
+
+  for (const p of paragraphList.value) {
+    const len = p.length + 10;
+    if (count + len > maxChars && cur.length > 0) {
+      pages.push(cur);
+      cur = [p];
+      count = len;
+    } else {
+      cur.push(p);
+      count += len;
+    }
+  }
+  if (cur.length > 0) {
+    pages.push(cur);
+  }
+  return pages.length > 0 ? pages : [[]];
+});
+
+const totalPages = computed(() => chapterPages.value.length);
+const currentPageParas = computed(() => chapterPages.value[currentPageIndex.value] || []);
+const chapterProgress = computed(() => {
+  if (chapterList.value.length <= 1) return 100;
+  return Math.round(((currentIndex.value + 1) / chapterList.value.length) * 100);
+});
+
 const filteredChapters = computed(() => {
   const list = chapterList.value.map((c, i) => ({ ...c, index: i }));
   if (!catalogFilter.value.trim()) return list;
-  return list.filter(c => c.title && c.title.includes(catalogFilter.value.trim()));
+  const q = catalogFilter.value.trim().toLowerCase();
+  return list.filter(c => c.title && c.title.toLowerCase().includes(q));
 });
 
 const readerStyle = computed(() => {
   return {
     fontSize: `${readerStore.fontSize}px`,
     lineHeight: readerStore.lineHeight,
-    fontFamily: 'var(--reader-font-family)'
+    fontWeight: readerStore.fontWeight || 400,
+    fontFamily: 'var(--reader-font-family, system-ui)'
   };
 });
+
+const slideSheetStyle = computed(() => {
+  const base = {
+    maxWidth: `${readerStore.readWidth || 800}px`
+  };
+  if (isTouching.value && touchDragX.value !== 0) {
+    base.transform = `translateX(${touchDragX.value}px)`;
+    base.transition = 'none';
+  }
+  return base;
+});
+
+const simulationSheetStyle = computed(() => {
+  const base = {
+    maxWidth: `${readerStore.readWidth || 800}px`
+  };
+  if (isTouching.value && touchDragX.value !== 0) {
+    const angle = Math.max(-180, Math.min(0, (touchDragX.value / window.innerWidth) * 180));
+    base.transform = `rotateY(${angle}deg)`;
+    base.transition = 'none';
+  }
+  return base;
+});
+
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2, '0');
+  const m = String(now.getMinutes()).padStart(2, '0');
+  currentTimeStr.value = `${h}:${m}`;
+}
+
+// 触摸手势控制 (原生App级滑动切换与微阻尼拖拽)
+let touchStartX = 0;
+let touchStartY = 0;
+let touchStartTime = 0;
+let isSwipeAction = false;
+
+function onTouchStart(e) {
+  if (!e.touches || !e.touches[0]) return;
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+  touchStartTime = Date.now();
+  touchDragX.value = 0;
+  isTouching.value = true;
+  isSwipeAction = false;
+}
+
+function onTouchMove(e) {
+  if (!isTouching.value || !e.touches || !e.touches[0]) return;
+  const deltaX = e.touches[0].clientX - touchStartX;
+  const deltaY = e.touches[0].clientY - touchStartY;
+
+  // 水平位移显著大于垂直位移时触发横向滑动
+  if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
+    isSwipeAction = true;
+    touchDragX.value = deltaX;
+  }
+}
+
+function onTouchEnd(e) {
+  if (!isTouching.value) return;
+  isTouching.value = false;
+  const deltaX = touchDragX.value;
+  const elapsed = Date.now() - touchStartTime;
+  touchDragX.value = 0;
+
+  if (isSwipeAction) {
+    if (deltaX < -35 || (deltaX < -15 && elapsed < 250)) {
+      // 向左滑 -> 下一页
+      nextPageWithAnimation();
+    } else if (deltaX > 35 || (deltaX > 15 && elapsed < 250)) {
+      // 向右滑 -> 上一页
+      prevPageWithAnimation();
+    }
+  }
+}
+
+function handlePageTapArea(e) {
+  // 如果是滑动操作刚结束，则不视作点击
+  if (isSwipeAction) return;
+
+  statsStore.recordActivity();
+  const width = window.innerWidth;
+  const clickX = e.clientX;
+
+  if (clickX < width * 0.3) {
+    // 点击左侧 30% -> 上一页
+    prevPageWithAnimation();
+  } else if (clickX > width * 0.7) {
+    // 点击右侧 30% -> 下一页
+    nextPageWithAnimation();
+  } else {
+    // 点击中间 40% -> 唤出/收起控制面板
+    showControls.value = !showControls.value;
+  }
+}
+
+function nextPageWithAnimation() {
+  if (readerStore.pageMode === 'simulation') {
+    flipDirection.value = 'next';
+    isFlipping3D.value = true;
+    setTimeout(() => {
+      nextPage();
+      isFlipping3D.value = false;
+    }, 280);
+  } else {
+    nextPage();
+  }
+}
+
+function prevPageWithAnimation() {
+  if (readerStore.pageMode === 'simulation') {
+    flipDirection.value = 'prev';
+    isFlipping3D.value = true;
+    setTimeout(() => {
+      prevPage();
+      isFlipping3D.value = false;
+    }, 280);
+  } else {
+    prevPage();
+  }
+}
+
+function nextPage() {
+  if (currentPageIndex.value < totalPages.value - 1) {
+    currentPageIndex.value++;
+  } else {
+    // 翻完当前章最后一页，自动进下一章并回到第 0 页
+    if (currentIndex.value < chapterList.length - 1) {
+      nextChapter();
+      currentPageIndex.value = 0;
+    } else {
+      ElMessage.info('已读至全书最新章节！');
+    }
+  }
+}
+
+function prevPage() {
+  if (currentPageIndex.value > 0) {
+    currentPageIndex.value--;
+  } else {
+    // 翻至当前章最前页，向前翻至上一章最后一页
+    if (currentIndex.value > 0) {
+      prevChapter();
+      // 等待上一章内容加载后跳至尾页
+      setTimeout(() => {
+        currentPageIndex.value = Math.max(0, totalPages.value - 1);
+      }, 300);
+    } else {
+      ElMessage.info('已是第一章开头');
+    }
+  }
+}
 
 async function checkBookshelfStatus() {
   if (!bookUrl.value) return;
@@ -377,7 +636,6 @@ async function addToBookshelf() {
       bookUrl: bookUrl.value,
       origin: origin.value || '',
       originName: origin.value || '',
-      coverUrl: route.query.coverUrl || '',
       durChapterIndex: currentIndex.value,
       durChapterTitle: currentChapter.value?.title || '',
       latestChapterTitle: chapterList.value[chapterList.value.length - 1]?.title || ''
@@ -385,83 +643,101 @@ async function addToBookshelf() {
     const res = await axios.post('/reader3/saveBook', payload);
     if (res.data && res.data.isSuccess) {
       isInBookshelf.value = true;
-      ElMessage.success(`《${bookName.value}》已成功加入书架！`);
+      ElMessage.success('已成功加入书架！实时同步阅读进度');
     } else {
       ElMessage.error(res.data?.errorMsg || '加入书架失败');
     }
   } catch (e) {
-    ElMessage.error('加入书架异常: ' + (e.message || ''));
+    ElMessage.error('网络异常，加入书架失败');
   }
+}
+
+async function handleSourceChanged(newSourceInfo) {
+  bookUrl.value = newSourceInfo.newUrl;
+  if (newSourceInfo.origin) origin.value = newSourceInfo.origin;
+
+  router.replace({
+    path: '/reader',
+    query: {
+      ...route.query,
+      bookUrl: newSourceInfo.newUrl,
+      origin: newSourceInfo.origin,
+      name: bookName.value,
+      author: author.value
+    }
+  });
+
+  // 记住当前章节标题以便对齐
+  const oldTitle = currentChapter.value?.title || '';
+  await loadChapterCatalog();
+
+  // 尝试按章节名对齐
+  if (oldTitle) {
+    const matchedIdx = chapterList.value.findIndex(c => c.title === oldTitle);
+    if (matchedIdx !== -1) {
+      currentIndex.value = matchedIdx;
+    }
+  }
+  currentPageIndex.value = 0;
+  fetchChapterContent(currentIndex.value);
+  checkBookshelfStatus();
 }
 
 async function loadChapterCatalog() {
-  if (!bookUrl.value) {
-    catalogError.value = '未指定有效的小说链接';
-    return;
-  }
+  if (!bookUrl.value) return;
   catalogLoading.value = true;
   catalogError.value = '';
-  loading.value = true;
+
   try {
-    const payload = {
-      url: bookUrl.value,
-      bookSourceUrl: origin.value || ''
-    };
-    const res = await axios.post('/reader3/getChapterList', payload, { timeout: 25000 });
-    if (res.data && res.data.isSuccess && Array.isArray(res.data.data) && res.data.data.length > 0) {
-      chapterList.value = res.data.data;
-      catalogError.value = '';
-      await loadChapterContent(currentIndex.value);
+    const res = await axios.post('/reader3/getChapterList', {
+      url: bookUrl.value
+    }, { timeout: 15000 });
+
+    if (res.data && res.data.isSuccess && Array.isArray(res.data.data)) {
+      chapterList.value = res.data.data.map((c, idx) => ({
+        index: idx,
+        title: c.title || c.chapterTitle || `第 ${idx + 1} 章`,
+        url: c.url || c.chapterUrl || ''
+      }));
+
+      if (chapterList.value.length > 0) {
+        const queryIndex = parseInt(route.query.index || '0', 10);
+        currentIndex.value = Math.max(0, Math.min(queryIndex, chapterList.value.length - 1));
+        await fetchChapterContent(currentIndex.value);
+      } else {
+        catalogError.value = '目标书源返回的目录为空，可能该站点改版或防爬拦截';
+      }
     } else {
-      const errMsg = res.data?.errorMsg || '未能从目标源解析出章节目录，可能是书源已失效或目标网站防爬拦截';
-      catalogError.value = errMsg;
-      ElMessage.error(errMsg);
+      catalogError.value = res.data?.errorMsg || '未能从目标源解析出章节目录，建议立即换源';
     }
-  } catch (e) {
-    const errMsg = e.response?.data?.errorMsg || e.message || '网络连接超时';
-    catalogError.value = '抓取目标网站小说目录失败: ' + errMsg;
-    ElMessage.error(catalogError.value);
+  } catch (err) {
+    catalogError.value = err.message || '网络连接超时，无法连接目标书源';
   } finally {
     catalogLoading.value = false;
-    loading.value = false;
   }
 }
 
-async function loadChapterContent(index) {
+async function fetchChapterContent(index) {
   if (!chapterList.value[index]) return;
+  const chapter = chapterList.value[index];
   loading.value = true;
-  contentError.value = '';
-  currentIndex.value = index;
-  statsStore.recordActivity();
+  currentPageIndex.value = 0;
 
-  // 1. 优先读取 IndexedDB 离线缓存
-  const offlineText = await offlineStore.getChapterContent(bookUrl.value, index);
-  if (offlineText) {
-    chapterContent.value = offlineText;
-    loading.value = false;
-    return;
-  }
-
-  // 2. 本地无缓存时向后端请求实时抓取正文
   try {
-    const payload = {
+    const res = await axios.post('/reader3/getBookContent', {
       url: bookUrl.value,
-      index: index,
-      bookSourceUrl: origin.value || ''
-    };
-    const res = await axios.post('/reader3/getBookContent', payload, { timeout: 25000 });
+      index: index
+    }, { timeout: 12000 });
+
     if (res.data && res.data.isSuccess) {
       chapterContent.value = res.data.data || '';
-      contentError.value = '';
+      saveProgress(index);
     } else {
-      const errMsg = res.data?.errorMsg || '章节正文获取失败';
-      contentError.value = errMsg;
-      chapterContent.value = `⚠️ 获取本章正文失败：${errMsg}\n\n建议点击右上角重新加载，或返回搜索列表换源阅读。`;
+      const errMsg = res.data?.errorMsg || '未知解析异常';
+      chapterContent.value = `⚠️ 获取本章正文失败：${errMsg}\n\n建议点击顶部【🔀 换源】切换至优质源继续阅读。`;
     }
-  } catch (e) {
-    const errMsg = e.response?.data?.errorMsg || e.message || '网络连接超时';
-    contentError.value = errMsg;
-    chapterContent.value = `⚠️ 抓取目标网站本章正文失败：${errMsg}\n\n建议稍后重试或尝试更换其他书源。`;
+  } catch (err) {
+    chapterContent.value = `⚠️ 网络连接超时：无法拉取本章正文。\n\n建议点击顶部【🔀 换源】切换书源。`;
   } finally {
     loading.value = false;
   }
@@ -469,118 +745,112 @@ async function loadChapterContent(index) {
 
 function prevChapter() {
   if (currentIndex.value > 0) {
-    loadChapterContent(currentIndex.value - 1);
+    currentIndex.value--;
+    fetchChapterContent(currentIndex.value);
   }
 }
 
 function nextChapter() {
   if (currentIndex.value < chapterList.value.length - 1) {
-    loadChapterContent(currentIndex.value + 1);
+    currentIndex.value++;
+    fetchChapterContent(currentIndex.value);
   }
 }
 
-function jumpToChapter(index) {
-  loadChapterContent(index);
+function jumpToChapter(val) {
+  currentIndex.value = val;
+  fetchChapterContent(val);
 }
 
-function selectCatalogChapter(index) {
+function selectCatalogChapter(idx) {
   showCatalogDrawer.value = false;
-  loadChapterContent(index);
+  currentIndex.value = idx;
+  fetchChapterContent(idx);
 }
 
 function refreshCurrentChapter() {
-  loadChapterContent(currentIndex.value);
+  fetchChapterContent(currentIndex.value);
 }
 
-function handleContainerClick(e) {
+function saveProgress(idx) {
+  try {
+    axios.post('/reader3/saveBookProgress', {
+      url: bookUrl.value,
+      index: idx
+    });
+  } catch (e) {}
+}
+
+function handleContainerClick() {
+  // 点击空白处记录活跃度
   statsStore.recordActivity();
-  const width = window.innerWidth;
-  const clickX = e.clientX;
+}
 
-  // 点击屏幕正中间 40% 区域呼出/隐藏菜单
-  if (clickX > width * 0.3 && clickX < width * 0.7) {
-    showControls.value = !showControls.value;
+function handleKeyDown(e) {
+  if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+    prevPageWithAnimation();
+  } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+    nextPageWithAnimation();
+  } else if (e.key === 'Escape') {
+    showControls.value = false;
   }
 }
 
-function handlePageFlipClick(e) {
-  statsStore.recordActivity();
-  const width = window.innerWidth;
-  const clickX = e.clientX;
-
-  if (clickX < width * 0.3) {
-    prevChapter();
-  } else if (clickX > width * 0.7) {
-    nextChapter();
-  }
+function goBack() {
+  router.push('/');
 }
 
-function handleSelectionChange() {
-  const selection = window.getSelection();
-  const text = selection.toString().trim();
-  if (text.length > 2) {
-    selectedText.value = text;
-    const range = selection.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    bubblePos.value = {
-      x: rect.left + rect.width / 2,
-      y: rect.top - 12
-    };
-  } else {
-    selectedText.value = '';
-  }
+// 听书逻辑
+function isSpeakingThisPara(para) {
+  if (!isSpeaking.value || currentSpeakingIndex.value < 0) return false;
+  return paragraphList.value[currentSpeakingIndex.value] === para;
 }
 
-function copySelection() {
-  if (selectedText.value) {
-    navigator.clipboard.writeText(selectedText.value);
-    ElMessage.success('已复制到剪贴板');
-    selectedText.value = '';
-  }
-}
-
-function openQuoteModal() {
-  showQuoteModal.value = true;
-}
-
-// 多角色拟人广播剧听书
 function toggleSpeech() {
-  if (!('speechSynthesis' in window)) {
-    ElMessage.warning('当前浏览器暂不支持语音朗读');
-    return;
-  }
-
   if (isSpeaking.value) {
-    window.speechSynthesis.cancel();
-    isSpeaking.value = false;
-    currentSpeakingIndex.value = -1;
-    return;
+    stopSpeech();
+  } else {
+    startSpeech();
   }
-
-  isSpeaking.value = true;
-  speakNextParagraph(0);
 }
 
-function speakNextParagraph(pIdx) {
-  if (!isSpeaking.value || pIdx >= paragraphList.value.length) {
-    isSpeaking.value = false;
-    currentSpeakingIndex.value = -1;
+function startSpeech() {
+  if (!('speechSynthesis' in window)) {
+    ElMessage.warning('当前浏览器环境不支持语音合成');
+    return;
+  }
+  isSpeaking.value = true;
+  currentSpeakingIndex.value = 0;
+  speakNextParagraph();
+}
+
+function speakNextParagraph() {
+  if (!isSpeaking.value) return;
+  if (currentSpeakingIndex.value >= paragraphList.value.length) {
+    // 本章读完自动进下一章
+    nextChapter();
+    currentSpeakingIndex.value = 0;
+    setTimeout(() => {
+      speakNextParagraph();
+    }, 1000);
     return;
   }
 
-  currentSpeakingIndex.value = pIdx;
-  const text = paragraphList.value[pIdx];
+  const text = paragraphList.value[currentSpeakingIndex.value];
+  if (!text) {
+    currentSpeakingIndex.value++;
+    speakNextParagraph();
+    return;
+  }
 
-  // 智能识别对话（引号内的对话调高音调变女声/主角音，旁白采用稳重男声）
-  const isDialogue = text.startsWith('“') || text.startsWith('"') || text.includes('说：');
-
+  window.speechSynthesis.cancel();
   speechUtterance = new SpeechSynthesisUtterance(text);
   speechUtterance.lang = 'zh-CN';
   speechUtterance.rate = readerStore.ttsSpeed || 1.0;
-  speechUtterance.pitch = isDialogue ? 1.25 : 0.95; // 角色音色拟人区别
 
   speechUtterance.onend = () => {
-    speakNextParagraph(pIdx + 1);
+    currentSpeakingIndex.value++;
+    speakNextParagraph();
   };
 
   speechUtterance.onerror = () => {
@@ -590,97 +860,162 @@ function speakNextParagraph(pIdx) {
   window.speechSynthesis.speak(speechUtterance);
 }
 
-function handleKeyDown(e) {
-  statsStore.recordActivity();
-  if (e.key === 'ArrowRight' || e.key === ' ') {
-    nextChapter();
-  } else if (e.key === 'ArrowLeft') {
-    prevChapter();
-  } else if (e.key === 'Escape') {
-    showControls.value = !showControls.value;
-  }
-}
-
-function goBack() {
-  if (window.history.length > 1) {
-    router.back();
-  } else {
-    router.push('/');
-  }
-}
-
-onMounted(async () => {
-  readerStore.initReaderEnvironment();
-  await checkBookshelfStatus();
-  await loadChapterCatalog();
-  await offlineStore.refreshCachedIndices(bookUrl.value);
-
-  // 启动阅读时间记录器 (每秒触发一次)
-  statsTimer = setInterval(() => {
-    const wordsInPage = paragraphList.value.join('').length;
-    statsStore.tickSecond(Math.round(wordsInPage / 100));
-  }, 1000);
-});
-
-onUnmounted(() => {
-  if (statsTimer) clearInterval(statsTimer);
+function stopSpeech() {
+  isSpeaking.value = false;
+  currentSpeakingIndex.value = -1;
   if ('speechSynthesis' in window) {
     window.speechSynthesis.cancel();
   }
+}
+
+function handleSelectionChange() {
+  const sel = window.getSelection();
+  const txt = sel ? sel.toString().trim() : '';
+  if (txt.length > 2) {
+    selectedText.value = txt;
+    try {
+      const range = sel.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+      bubblePos.value = {
+        x: rect.left + rect.width / 2,
+        y: rect.top - 12
+      };
+    } catch (e) {}
+  } else {
+    selectedText.value = '';
+  }
+}
+
+function copySelection() {
+  if (selectedText.value) {
+    navigator.clipboard.writeText(selectedText.value);
+    ElMessage.success('已复制所选文字');
+    selectedText.value = '';
+  }
+}
+
+function openQuoteModal() {
+  showQuoteModal.value = true;
+}
+
+onMounted(() => {
+  readerStore.initReaderEnvironment();
+  updateClock();
+  clockInterval = setInterval(updateClock, 30000);
+
+  if (bookUrl.value) {
+    loadChapterCatalog();
+    checkBookshelfStatus();
+  }
+
+  statsTimer = setInterval(() => {
+    statsStore.recordReadingTime(10);
+  }, 10000);
+});
+
+onUnmounted(() => {
+  stopSpeech();
+  if (statsTimer) clearInterval(statsTimer);
+  if (clockInterval) clearInterval(clockInterval);
 });
 </script>
 
 <style scoped>
-.reader-page {
-  position: relative;
-  min-height: 100vh;
-  width: 100%;
-  outline: none;
-  user-select: text;
-  -webkit-user-select: text;
-  transition: background-color 0.3s, color 0.3s;
+/* 7 款 reader 官方经典阅读主题配色变量 */
+.reader-theme-0 {
+  --reader-bg: #faf5eb;
+  --reader-text: #262626;
+  --reader-panel: rgba(237, 231, 218, 0.96);
+  --reader-border: #e8dec8;
+}
+.reader-theme-1 {
+  --reader-bg: #f5eacd;
+  --reader-text: #332a1e;
+  --reader-panel: rgba(235, 217, 176, 0.96);
+  --reader-border: #e6d3a5;
+}
+.reader-theme-2 {
+  --reader-bg: #e6f2e6;
+  --reader-text: #1c301c;
+  --reader-panel: rgba(213, 232, 213, 0.96);
+  --reader-border: #cce2cc;
+}
+.reader-theme-3 {
+  --reader-bg: #e4f1f5;
+  --reader-text: #1f2d33;
+  --reader-panel: rgba(210, 229, 235, 0.96);
+  --reader-border: #c7e0e8;
+}
+.reader-theme-4 {
+  --reader-bg: #f5e4e4;
+  --reader-text: #382323;
+  --reader-panel: rgba(235, 210, 210, 0.96);
+  --reader-border: #e8c9c9;
+}
+.reader-theme-5 {
+  --reader-bg: #e0e0e0;
+  --reader-text: #222222;
+  --reader-panel: rgba(210, 210, 210, 0.96);
+  --reader-border: #cccccc;
+}
+.reader-theme-6 {
+  --reader-bg: #121212;
+  --reader-text: #8c8c8c;
+  --reader-panel: rgba(26, 26, 26, 0.96);
+  --reader-border: #2a2a2a;
 }
 
+.reader-page {
+  background-color: var(--reader-bg, #faf5eb);
+  color: var(--reader-text, #262626);
+  min-height: 100vh;
+  width: 100%;
+  position: relative;
+  transition: background-color 0.25s ease, color 0.25s ease;
+  user-select: text;
+  outline: none;
+}
+
+/* 顶部操作控制栏 */
 .reader-top-bar {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  z-index: 100;
   transform: translateY(-100%);
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  padding: 8px 16px;
-}
-
-.reader-bottom-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
   z-index: 100;
-  transform: translateY(100%);
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 8px 16px;
 }
 
-.bar-visible {
+.reader-top-bar.bar-visible {
   transform: translateY(0);
+}
+
+.matte-control-panel {
+  background: var(--reader-panel, rgba(255, 255, 255, 0.96));
+  color: var(--reader-text, #262626);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--reader-border, rgba(0, 0, 0, 0.08));
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
 .top-bar-content {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
+  padding: 8px 14px;
 }
 
 .top-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
+  max-width: 45%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 55%;
 }
 
 .top-actions {
@@ -689,25 +1024,194 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.shelf-add-pill {
-  background: rgba(16, 185, 129, 0.2) !important;
-  color: #10b981 !important;
-  padding: 4px 10px !important;
-  border-radius: 9999px !important;
-  font-weight: 600 !important;
-  border: 1px solid rgba(16, 185, 129, 0.4) !important;
-  transition: all 0.2s;
+.source-btn-pill {
+  background: #10b981 !important;
+  color: #fff !important;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
-.shelf-add-pill:hover {
-  background: rgba(16, 185, 129, 0.35) !important;
+.shelf-add-pill {
+  background: #3b82f6 !important;
+  color: #fff !important;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 11px;
+}
+
+/* 正文视口区域 */
+.reader-content-viewport {
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.reader-content-viewport:not(.is-paginated) {
+  padding: 40px 20px 80px;
+}
+
+/* 滚动模式样式 */
+.scroll-mode-container {
+  margin: 0 auto;
+}
+
+.chapter-heading {
+  font-size: 1.4em;
+  font-weight: 700;
+  margin-bottom: 24px;
+}
+
+.chapter-body p, .page-content-box p {
+  text-indent: 2em;
+  margin-bottom: 14px;
+  line-height: inherit;
+  font-weight: inherit;
+  text-align: justify;
+  word-break: break-all;
+  transition: background 0.2s;
+}
+
+.speaking-highlight {
+  background: rgba(16, 185, 129, 0.22);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+.chapter-nav-btns {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 40px;
+  padding-bottom: 40px;
+}
+
+/* APP 级左右滑动与 3D 仿真视口容器 */
+.app-flip-viewport {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--reader-bg, #faf5eb);
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.slide-flip-container, .simulation-flip-container {
+  padding: 12px 14px;
+  box-sizing: border-box;
+}
+
+.slide-page-sheet, .simulation-page-sheet {
+  width: 100%;
+  height: calc(100vh - 32px);
+  border-radius: 6px;
+  box-sizing: border-box;
+  padding: 18px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background-color: var(--reader-bg, #faf5eb);
+  color: var(--reader-text, #262626);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  position: relative;
+}
+
+.slide-page-sheet {
+  transition: transform 0.28s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.simulation-page-sheet {
+  perspective: 1600px;
+  -webkit-perspective: 1600px;
+  transform-style: preserve-3d;
+  -webkit-transform-style: preserve-3d;
+  transform-origin: left center;
+  transition: transform 0.32s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.simulation-page-sheet.flipping-forward {
+  transform: rotateY(-180deg);
+}
+
+.simulation-page-sheet.flipping-backward {
+  transform: rotateY(0deg);
+}
+
+.simulation-shadow-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.28s;
+  background: linear-gradient(to right, rgba(0,0,0,0) 30%, rgba(0,0,0,0.18) 100%);
+}
+
+.simulation-shadow-layer.active {
+  opacity: 1;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  opacity: 0.65;
+  margin-bottom: 12px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.header-chap-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 75%;
+}
+
+.page-content-box {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.page-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  opacity: 0.65;
+  margin-top: 12px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+/* 底部操作面板 */
+.reader-bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  transform: translateY(100%);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 100;
+  padding: 8px 16px;
+}
+
+.reader-bottom-bar.bar-visible {
+  transform: translateY(0);
 }
 
 .bottom-bar-content {
+  padding: 14px 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px;
+  max-width: 680px;
+  margin: 0 auto;
 }
 
 .progress-slider-row {
@@ -716,93 +1220,69 @@ onUnmounted(() => {
   gap: 12px;
 }
 
+.progress-slider-row :deep(.el-slider) {
+  flex: 1;
+}
+
 .step-btn {
   background: none;
-  border: none;
-  color: var(--primary-color);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 6px;
+  padding: 4px 10px;
   font-size: 12px;
-  font-weight: 600;
+  color: inherit;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .tts-row {
-  text-align: center;
+  display: flex;
+  justify-content: center;
 }
 
-.settings-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+.glow-btn {
+  border-radius: 20px;
+  padding: 6px 18px;
+}
+
+.quick-themes-row {
+  display: flex;
+  justify-content: center;
   gap: 12px;
 }
 
-@media (min-width: 640px) {
-  .settings-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-.setting-item {
+.theme-color-pill {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border-width: 1px;
+  border-style: solid;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.setting-label {
-  font-size: 11px;
-  color: #64748b;
-}
-
-.theme-buttons {
-  display: flex;
-  gap: 8px;
-}
-
-.theme-color-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 9999px;
-  border: 2px solid transparent;
-  cursor: pointer;
-}
-
-.theme-btn-0 { background: #fbfaf7; }
-.theme-btn-1 { background: #f3edd9; }
-.theme-btn-2 { background: #dcead4; }
-.theme-btn-3 { background: #141518; }
-.theme-btn-4 { background: #e5e6e8; }
-
-.theme-color-btn.active {
-  border-color: #10b981;
-}
-
-.font-size-ctrl {
-  display: flex;
-  flex-direction: row;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.18s;
 }
 
-.size-val {
-  font-size: 13px;
-  font-weight: 600;
+.theme-color-pill.active {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 2px #10b981;
+}
+
+.pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 
 .bottom-footer-actions {
   display: flex;
   justify-content: space-around;
-  border-top: 1px solid rgba(148, 163, 184, 0.15);
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
   padding-top: 8px;
 }
 
-.reader-content-viewport {
-  min-height: 100vh;
-  padding: 40px 20px 80px;
-  box-sizing: border-box;
-  max-width: 800px;
-  margin: 0 auto;
-}
-
+/* 状态提示卡片 */
 .reader-state-card {
   display: flex;
   flex-direction: column;
@@ -821,23 +1301,14 @@ onUnmounted(() => {
 }
 
 .state-sub {
-  font-size: 14px;
+  font-size: 13px;
   color: #64748b;
-  margin-bottom: 6px;
 }
 
 .state-origin {
-  font-size: 12px;
+  font-size: 11px;
   color: #94a3b8;
-  word-break: break-all;
-  max-width: 480px;
-}
-
-.reader-error-state {
-  background: rgba(239, 68, 68, 0.05);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: 12px;
-  margin-top: 40px;
+  margin-top: 6px;
 }
 
 .error-emoji {
@@ -855,39 +1326,6 @@ onUnmounted(() => {
 .state-btns {
   display: flex;
   gap: 12px;
-}
-
-.chapter-heading {
-  font-size: 1.4em;
-  font-weight: 700;
-  margin-bottom: 24px;
-}
-
-.chapter-body p {
-  text-indent: 2em;
-  margin-bottom: 1em;
-  line-height: inherit;
-  transition: background 0.2s;
-}
-
-.speaking-highlight {
-  background: rgba(16, 185, 129, 0.18);
-  border-radius: 4px;
-  padding: 2px 4px;
-}
-
-.page-header {
-  font-size: 12px;
-  color: #94a3b8;
-  margin-bottom: 16px;
-}
-
-.page-footer {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: #94a3b8;
-  margin-top: 24px;
 }
 
 .reader-loading {
@@ -939,7 +1377,7 @@ onUnmounted(() => {
 }
 
 .chapter-item.active {
-  color: var(--primary-color);
+  color: #10b981;
   font-weight: 600;
 }
 
@@ -954,5 +1392,29 @@ onUnmounted(() => {
   color: inherit;
   font-size: 12px;
   cursor: pointer;
+}
+
+.custom-selection-bubble {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  background: #1e293b;
+  color: #fff;
+  border-radius: 8px;
+  padding: 4px 8px;
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  z-index: 200;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+}
+
+.bubble-btn {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.bubble-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 </style>
