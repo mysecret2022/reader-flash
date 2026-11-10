@@ -12,7 +12,7 @@ if errorlevel 1 (
 )
 echo ==============================================
 echo reader-flash started successfully!
-echo Access reader-flash at: http://localhost:8090
+echo Access reader-flash at: http://localhost:8080
 echo Default admin credentials: admin / admin
 echo ==============================================
 pause

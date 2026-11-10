@@ -25,7 +25,7 @@
 
 > 💡 **架构原生支持**：官方镜像已通过 GitHub Actions 构建为**多架构镜像（Multi-Arch OCI Image）**，同时原生包含 **`linux/amd64` (Intel/AMD PC、云服务器)** 与 **`linux/arm64` (树莓派、Apple Silicon M 系列 Mac、群晖/绿联/极空间/飞牛等各类 NAS 与 ARM 软路由)**。Docker 会根据您的系统架构**自动精准匹配下载**，无需任何额外配置！
 
-#### 1. Docker Compose 方式 (推荐)
+#### 1. Docker Compose 方式 (推荐，一键启动)
 
 **Linux / macOS:**
 ```bash
@@ -44,7 +44,7 @@ docker compose pull && docker compose up -d
 docker run -d \
   --name reader-flash \
   --restart always \
-  -p 8090:8080 \
+  -p 8080:8080 \
   -v $(pwd)/storage:/storage \
   -v $(pwd)/logs:/app/logs \
   -e TZ=Asia/Shanghai \
@@ -54,7 +54,7 @@ docker run -d \
   ghcr.io/mysecret2022/reader-flash:latest
 ```
 
-- **访问地址**：`http://localhost:8090` (或 `http://服务器IP:8090`)
+- **访问地址**：`http://localhost:8080` (或 `http://服务器IP:8080`)
 - **默认管理员账号**：`admin`
 - **默认管理员密码**：`admin`
 

@@ -4,12 +4,15 @@ services:
     container_name: reader-flash
     restart: always
     ports:
-      - "8090:8080" # 宿主机访问端口 http://localhost:8090
+      - "8080:8080" # 外部访问端口，默认与经典 reader 保持一致（若宿主机 8080 被占用可改为 8095:8080）
     volumes:
       - ./storage:/storage # 数据持久化目录（书源、书架、用户数据、缓存及配置）
-      - ./logs:/app/logs   # 运行日志
+      - ./logs:/app/logs   # 日志输出目录（与管理后台诊断日志实时互通）
     environment:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
       - JAVA_OPTS=-Xmx512m
-      - READER_APP_SECURE=true # 多用户模式（管理员：admin / admin）
+      - READER_APP_SECURE=true # 默认多用户鉴权模式（默认管理员：admin，默认密码：admin）
+      # 可在首次登录后台后直接修改密码及配置邀请码，也可通过下方环境变量直接初始化：
+      # - READER_APP_SECUREKEY=admin # 初始管理员密码
+      # - READER_APP_INVITECODE=      # 注册邀请码（留空则开放注册）
