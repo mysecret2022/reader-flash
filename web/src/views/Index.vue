@@ -1,803 +1,1005 @@
 <template>
-  <div class="bookshelf-page">
-    <!-- 顶部专业导航栏 -->
-    <header class="app-header shelf-header">
-      <div class="header-left">
-        <span class="logo-text">⚡ Reader</span>
-        <span class="version-tag">极速版</span>
-      </div>
+  <div
+    class="index-wrapper"
+    :class="{
+      night: isNight,
+      day: !isNight
+    }"
+  >
+    <!-- 左侧固定 260px 导航栏 (精准对齐 192.168.0.30:8080) -->
+    <div
+      class="navigation-wrapper"
+      :class="{
+        'navigation-out': isMobile && !showMobileNav,
+        'navigation-in': isMobile && showMobileNav
+      }"
+    >
+      <div class="navigation-inner-wrapper">
+        <div class="navigation-title">
+          阅读
+          <span class="version-text">v1.0.3</span>
+        </div>
+        <div class="navigation-sub-title">
+          清风不识字，何故乱翻书
+        </div>
 
-      <!-- 搜索输入框 -->
-      <div class="search-bar">
-        <el-input
-          v-model="searchQuery"
-          placeholder="搜索书名、作者，毫秒级流式呈现..."
-          clearable
-          @keyup.enter="handleSearch"
-        >
-          <template #prefix>
-            <span class="search-icon">🔍</span>
-          </template>
-          <template #append>
-            <el-button :loading="bookStore.isSearching" @click="handleSearch">
-              搜索
+        <!-- 1. 搜索书籍 -->
+        <div class="search-wrapper">
+          <el-input
+            size="small"
+            placeholder="搜索书籍"
+            v-model="searchKeyword"
+            class="search-input"
+            clearable
+            @keyup.enter="handleSearch"
+          >
+            <template #prefix>
+              <span class="search-prefix-icon">🔍</span>
+            </template>
+          </el-input>
+        </div>
+
+        <!-- 搜索设置 -->
+        <div class="setting-wrapper search-setting">
+          <div class="setting-title">
+            搜索设置
+          </div>
+          <div class="setting-item">
+            <el-select
+              size="small"
+              v-model="searchType"
+              class="setting-select"
+              placeholder="请选择搜索方式"
+            >
+              <el-option label="多源搜索" value="multi" />
+              <el-option label="单源搜索" value="single" />
+            </el-select>
+          </div>
+          <div class="setting-item" v-show="searchType !== 'single'">
+            <el-select
+              size="small"
+              v-model="bookSourceGroup"
+              class="setting-select"
+              placeholder="请选择搜索书源分组"
+            >
+              <el-option label="全部分组" value="" />
+              <el-option
+                v-for="grp in bookStore.groups"
+                :key="grp.groupId"
+                :label="`${grp.groupName}`"
+                :value="grp.groupName"
+              />
+            </el-select>
+          </div>
+          <div class="setting-item" v-show="searchType !== 'single'">
+            <el-select
+              size="small"
+              v-model="concurrentCount"
+              class="setting-select"
+              placeholder="请选择并发线程"
+            >
+              <el-option
+                v-for="item in [4, 8, 12, 16, 24, 30]"
+                :key="item"
+                :label="item + '并发线程'"
+                :value="item"
+              />
+            </el-select>
+          </div>
+        </div>
+
+        <!-- 2. 探索发现 -->
+        <div class="setting-wrapper">
+          <div class="setting-title">
+            探索发现
+          </div>
+          <div class="setting-item">
+            <el-button
+              type="primary"
+              plain
+              size="small"
+              style="width: 100%; border-radius: 8px; font-weight: 500;"
+              @click="openExplore"
+            >
+              探索书源 (发现/榜单)
             </el-button>
+          </div>
+        </div>
+
+        <!-- 3. 管理与账户 -->
+        <div class="setting-wrapper" style="margin-top: 28px;">
+          <div class="setting-title">
+            管理与账户
+          </div>
+          <div class="setting-item">
+            <el-dropdown
+              @command="handleAdminMenuCommand"
+              trigger="click"
+              style="width: 100%;"
+            >
+              <el-button
+                type="primary"
+                size="small"
+                style="width: 100%; border-radius: 8px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;"
+              >
+                <span>管理 ({{ currentUsername }})</span>
+                <span style="font-size: 11px;">▼</span>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu style="min-width: 160px;">
+                  <el-dropdown-item command="admin">
+                    控制台与管理后台
+                  </el-dropdown-item>
+                  <el-dropdown-item command="stats">
+                    阅读数据与统计
+                  </el-dropdown-item>
+                  <el-dropdown-item command="logout" divided>
+                    退出当前账号
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+        </div>
+
+        <!-- 底部夜间模式与信息 -->
+        <div class="bottom-icons">
+          <div class="theme-item" @click="toggleNight" :title="isNight ? '切换白天模式' : '切换夜间模式'">
+            <span v-if="!isNight">🌙</span>
+            <span v-else>☀️</span>
+          </div>
+          <div class="bottom-icon">
+            <a href="https://github.com/mysecret2022/reader-flash" target="_blank" rel="noreferrer" title="GitHub 仓库">
+              <span style="font-size: 20px; cursor: pointer;">🐙</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 遮罩层 (移动端菜单展开时) -->
+    <div
+      v-if="isMobile && showMobileNav"
+      class="nav-backdrop"
+      @click="showMobileNav = false"
+    ></div>
+
+    <!-- 右侧书架/搜索主体区域 (精准对齐 192.168.0.30:8080) -->
+    <div class="shelf-wrapper" ref="shelfWrapper" @click="isMobile && (showMobileNav = false)">
+      <!-- 顶部操作栏 -->
+      <div class="shelf-title">
+        <div class="shelf-title-left">
+          <span
+            v-if="isMobile"
+            class="mobile-menu-btn"
+            @click.stop="showMobileNav = !showMobileNav"
+          >
+            ☰
+          </span>
+          {{ isSearchResult ? '搜索' : '书架' }}
+          ({{ isSearchResult ? bookStore.searchResults.length : filteredBooks.length }})
+          <span v-if="isSearchResult && bookStore.isSearching" class="stream-indicator">
+            ⚡ 毫秒流式呈现中...
+          </span>
+        </div>
+
+        <div class="shelf-title-actions">
+          <div
+            class="title-btn"
+            v-if="isSearchResult"
+            @click="backToShelf"
+          >
+            书架
+          </div>
+          <div
+            class="title-btn"
+            v-if="!isSearchResult"
+            @click="refreshShelf"
+          >
+            <span v-if="refreshLoading">刷新中...</span>
+            <span v-else>刷新</span>
+          </div>
+          <div
+            class="title-btn"
+            v-if="!isSearchResult"
+            @click="showBookEditButton = !showBookEditButton"
+          >
+            {{ showBookEditButton ? "取消" : "编辑" }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 分组 Tabs 栏 (仅在书架模式显示) -->
+      <div class="book-group-wrapper" v-if="!isSearchResult">
+        <el-tabs class="book-group-tabs" v-model="selectedGroupTab">
+          <el-tab-pane label="全部" name="-1"></el-tab-pane>
+          <el-tab-pane
+            v-for="grp in bookStore.groups"
+            :key="grp.groupId"
+            :label="grp.groupName"
+            :name="String(grp.groupId)"
+          ></el-tab-pane>
+        </el-tabs>
+      </div>
+
+      <!-- 书籍列表展区 (书架与搜索结果共用 360x112px 经典卡片) -->
+      <div class="books-wrapper" ref="bookListRef">
+        <div class="wrapper">
+          <!-- 书架空状态 -->
+          <div v-if="!isSearchResult && filteredBooks.length === 0" class="empty-shelf-tip">
+            <div style="font-size: 32px; margin-bottom: 8px;">📚</div>
+            <div>书架暂无书籍，在左侧搜索栏搜索小说或进入后台导入书源</div>
+          </div>
+
+          <!-- 搜索空状态 -->
+          <div v-if="isSearchResult && bookStore.searchResults.length === 0 && !bookStore.isSearching" class="empty-shelf-tip">
+            <div style="font-size: 32px; margin-bottom: 8px;">🔍</div>
+            <div>未找到相关小说，请尝试更换关键词</div>
+          </div>
+
+          <!-- 1. 书架书籍卡片列表 -->
+          <template v-if="!isSearchResult">
+            <div
+              class="book"
+              v-for="book in filteredBooks"
+              :key="book.bookUrl"
+              @click="toDetail(book)"
+            >
+              <div class="cover-img">
+                <img
+                  class="cover"
+                  :src="book.coverUrl || defaultCover"
+                  :alt="book.name"
+                  loading="lazy"
+                  @error="onCoverError"
+                />
+              </div>
+
+              <div class="info">
+                <!-- 右上角角标或操作按钮 -->
+                <div class="book-operation">
+                  <span
+                    class="op-icon delete-icon"
+                    v-if="showBookEditButton"
+                    @click.stop="deleteBook(book)"
+                    title="从书架删除"
+                  >
+                    ✕
+                  </span>
+                  <span
+                    class="op-icon change-source-icon"
+                    v-if="showBookEditButton"
+                    @click.stop="openChangeSource(book)"
+                    title="换源"
+                  >
+                    🔀
+                  </span>
+                  <div
+                    class="unread-num-badge"
+                    v-if="!showBookEditButton && getUnreadCount(book) > 0"
+                  >
+                    {{ getUnreadCount(book) > 99 ? '99+' : getUnreadCount(book) }}
+                  </div>
+                </div>
+
+                <div class="name" :title="book.name">
+                  {{ book.name }}
+                </div>
+                <div class="sub">
+                  <span class="author">{{ book.author || '未知作者' }}</span>
+                  <span class="dot" v-if="book.totalChapterNum">•</span>
+                  <span class="size" v-if="book.totalChapterNum">共{{ book.totalChapterNum }}章</span>
+                </div>
+                <div class="dur-chapter" v-if="book.durChapterTitle">
+                  已读：{{ book.durChapterTitle }}
+                </div>
+                <div class="last-chapter" v-if="book.latestChapterTitle">
+                  {{ formatTime(book.lastCheckTime) }}：{{ book.latestChapterTitle }}
+                </div>
+              </div>
+            </div>
           </template>
-        </el-input>
-      </div>
 
-      <div class="header-right">
-        <el-tag size="small" type="info" effect="plain" class="current-user-tag">
-          👤 {{ currentUsername }}
-        </el-tag>
-        <el-button class="nav-btn" circle @click="showStatsModal = true" title="个人阅读数据与成就">
-          📊
-        </el-button>
-        <el-button class="nav-btn" circle @click="goToAdmin" title="书源管理中心">
-          ⚙️
-        </el-button>
-        <el-button class="nav-btn logout-btn" circle @click="handleLogout" title="退出登录">
-          🚪
-        </el-button>
-      </div>
-    </header>
+          <!-- 2. 搜索结果卡片列表 (经典对齐，支持立即加入书架) -->
+          <template v-else>
+            <div
+              class="book search-card-item"
+              v-for="(book, idx) in bookStore.searchResults"
+              :key="idx"
+              @click="toDetail(book)"
+            >
+              <div class="cover-img">
+                <img
+                  class="cover"
+                  :src="book.coverUrl || book.cover || defaultCover"
+                  :alt="book.name"
+                  loading="lazy"
+                  @error="onCoverError"
+                />
+              </div>
 
-    <!-- 流式搜索结果展区 (搜索激活时浮现) -->
-    <section v-if="bookStore.searchKeyword" class="search-results-section shelf-card">
-      <div class="section-header">
-        <div class="title-with-badge">
-          <span class="section-title">🔍 搜索结果: “{{ bookStore.searchKeyword }}”</span>
-          <span v-if="bookStore.isSearching" class="mint-badge animate-pulse">流式搜索中...</span>
-          <span v-else class="mint-badge">共找到 {{ bookStore.searchResults.length }} 条结果</span>
-        </div>
-        <el-button size="small" text @click="clearSearch">关闭搜索</el-button>
-      </div>
-
-      <div v-if="bookStore.searchResults.length === 0 && !bookStore.isSearching" class="empty-tip">
-        未找到相关小说，请尝试更换关键词或在书源管理中导入更多书源
-      </div>
-
-      <div class="search-grid">
-        <div
-          v-for="(item, idx) in bookStore.searchResults"
-          :key="idx"
-          class="search-card shelf-card"
-          @click="openSearchResult(item)"
-        >
-          <div class="search-card-cover">
-            <img :src="item.coverUrl || item.cover || defaultCover" :alt="item.name" loading="lazy" />
-          </div>
-          <div class="search-card-info">
-            <div class="book-name">{{ item.name }}</div>
-            <div class="book-author">✍️ {{ item.author || '未知作者' }}</div>
-            <div class="book-latest">最新: {{ item.latestChapterTitle || '暂无章节' }}</div>
-            <div class="book-source-tag">
-              <span class="origin-tag">{{ item.originName || item.origin || '优质源' }}</span>
-              <span v-if="item.time" class="rt-tag">⚡ {{ item.time }}ms</span>
+              <div class="info">
+                <div class="name" :title="book.name">
+                  {{ book.name }}
+                </div>
+                <div class="sub">
+                  <span class="author">{{ book.author || '未知作者' }}</span>
+                  <span class="dot">•</span>
+                  <span class="source-tag-text">{{ book.originName || book.origin || '书源' }}</span>
+                  <span v-if="book.time" class="source-time-text">⚡{{ book.time }}ms</span>
+                </div>
+                <div class="last-chapter" v-if="book.latestChapterTitle">
+                  最新：{{ book.latestChapterTitle }}
+                </div>
+                <div class="search-card-bottom" @click.stop>
+                  <el-tag
+                    type="success"
+                    size="small"
+                    class="setting-connect"
+                    :class="{ 'in-shelf': isBookInShelf(book) }"
+                    @click.stop="addSearchResultToShelf(book)"
+                  >
+                    {{ isBookInShelf(book) ? '✓ 已在书架' : '➕ 加入书架' }}
+                  </el-tag>
+                </div>
+              </div>
             </div>
-            <div class="search-card-actions" @click.stop>
-              <button class="card-btn btn-preview" @click.stop="openSearchResult(item)">
-                📖 立即预览
-              </button>
-              <button
-                class="card-btn btn-shelf"
-                :class="{ 'is-in-shelf': isBookInShelf(item) }"
-                @click.stop="addSearchResultToShelf(item)"
-              >
-                {{ isBookInShelf(item) ? '✓ 已在书架' : '➕ 加入书架' }}
-              </button>
-            </div>
-          </div>
+          </template>
         </div>
       </div>
-    </section>
+    </div>
 
-    <!-- 主书架区域 -->
-    <main class="bookshelf-main">
-      <!-- 分组标签栏 -->
-      <div class="group-tabs">
-        <button
-          class="group-tab-btn"
-          :class="{ active: bookStore.selectedGroup === -1 }"
-          @click="bookStore.selectedGroup = -1"
-        >
-          全部书籍 ({{ bookStore.bookshelf.length }})
-        </button>
-        <button
-          v-for="grp in bookStore.groups"
-          :key="grp.groupId"
-          class="group-tab-btn"
-          :class="{ active: bookStore.selectedGroup === grp.groupId }"
-          @click="bookStore.selectedGroup = grp.groupId"
-        >
-          {{ grp.groupName }}
-        </button>
-      </div>
-
-      <!-- 书架书籍卡片瀑布流网格 -->
-      <div v-if="bookStore.filteredBooks.length === 0" class="empty-shelf shelf-card">
-        <div class="empty-icon">📚</div>
-        <div class="empty-text">书架空空如也，快去上方搜搜精彩小说吧</div>
-      </div>
-
-      <div v-else class="books-grid">
-        <div
-          v-for="book in bookStore.filteredBooks"
-          :key="book.bookUrl"
-          class="book-shelf-card shelf-card"
-          @click="openBook(book)"
-        >
-          <!-- 封面图与离线角标 -->
-          <div class="cover-wrapper">
-            <img :src="book.coverUrl || book.cover || defaultCover" :alt="book.name" loading="lazy" />
-            <span v-if="hasOfflineCache(book.bookUrl)" class="offline-badge">
-              ⚡ 已离线
-            </span>
-          </div>
-
-          <div class="shelf-book-info">
-            <div class="shelf-book-title" :title="book.name">{{ book.name }}</div>
-            <div class="shelf-book-author">{{ book.author || '未知作者' }}</div>
-            <div class="shelf-book-bottom-row">
-              <span class="shelf-book-progress">
-                读至: {{ book.durChapterTitle || '第一章' }}
-              </span>
-              <button
-                class="shelf-change-source-btn"
-                @click.stop.prevent="openChangeSourceModal(book)"
-                title="全网智能测速换源"
-              >
-                🔀 换源
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </main>
-
-    <!-- 个人阅读数据与成就弹窗 -->
+    <!-- 阅读统计弹窗 -->
     <ReadingStatsModal v-model="showStatsModal" />
-
-    <!-- 书架换源抽屉 -->
-    <BookSourceDrawer
-      v-if="selectedShelfBook"
-      v-model="showSourceDrawer"
-      :book-name="selectedShelfBook.name"
-      :author="selectedShelfBook.author"
-      :book-url="selectedShelfBook.bookUrl"
-      :origin="selectedShelfBook.origin"
-      :dur-chapter-index="selectedShelfBook.durChapterIndex ?? 0"
-      :dur-chapter-title="selectedShelfBook.durChapterTitle || ''"
-      @change-source="handleShelfSourceChanged"
-      @closed="selectedShelfBook = null"
-    />
-
-    <!-- 移动端专属吸底导航栏 (偏向手机方向优化) -->
-    <nav class="mobile-bottom-nav">
-      <div class="nav-item active" @click="clearSearch">
-        <span class="icon">📚</span>
-        <span class="label">书架</span>
-      </div>
-      <div class="nav-item" @click="focusSearchInput">
-        <span class="icon">🔍</span>
-        <span class="label">找书</span>
-      </div>
-      <div class="nav-item" @click="showStatsModal = true">
-        <span class="icon">📊</span>
-        <span class="label">成就</span>
-      </div>
-      <div class="nav-item" @click="goToAdmin">
-        <span class="icon">⚙️</span>
-        <span class="label">控制台</span>
-      </div>
-      <div class="nav-item" @click="handleLogout">
-        <span class="icon">🚪</span>
-        <span class="label">退出</span>
-      </div>
-    </nav>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import request from '../utils/request';
-const axios = request;
-import { useBookStore } from '../stores/book';
-import { useOfflineStore } from '../stores/offline';
-import ReadingStatsModal from '../components/ReadingStatsModal.vue';
-import BookSourceDrawer from '../components/BookSourceDrawer.vue';
-import defaultCover from '../assets/imgs/noCover.jpeg';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { useBookStore } from '../stores/book';
+import request from '../utils/request';
+import ReadingStatsModal from '../components/ReadingStatsModal.vue';
+import defaultCoverImg from '../assets/imgs/noCover.jpeg';
 
 const router = useRouter();
 const bookStore = useBookStore();
-const offlineStore = useOfflineStore();
 
-const searchQuery = ref('');
+const defaultCover = defaultCoverImg;
+const searchKeyword = ref('');
+const searchType = ref('multi');
+const bookSourceGroup = ref('');
+const concurrentCount = ref(8);
+const selectedGroupTab = ref('-1');
+const showBookEditButton = ref(false);
+const refreshLoading = ref(false);
+const isSearchResult = ref(false);
 const showStatsModal = ref(false);
-const showSourceDrawer = ref(false);
-const selectedShelfBook = ref(null);
+const showMobileNav = ref(false);
+const isNight = ref(localStorage.getItem('reader_night_mode') === 'true');
+const windowWidth = ref(window.innerWidth);
 
-function openChangeSourceModal(book) {
-  selectedShelfBook.value = book;
-  showSourceDrawer.value = true;
-}
-
-function handleShelfSourceChanged() {
-  bookStore.fetchBookshelf();
-}
+const isMobile = computed(() => windowWidth.value <= 768);
 
 const currentUsername = computed(() => {
-  try {
-    const info = JSON.parse(localStorage.getItem('userInfo') || '{}');
-    return info.username || '读者';
-  } catch (e) {
-    return '读者';
-  }
+  return localStorage.getItem('username') || 'admin';
 });
 
-function handleSearch() {
-  if (!searchQuery.value.trim()) return;
-  bookStore.searchBooksStream(searchQuery.value.trim());
-}
-
-function clearSearch() {
-  bookStore.searchKeyword = '';
-  bookStore.searchResults = [];
-  searchQuery.value = '';
-}
-
-function focusSearchInput() {
-  const inputEl = document.querySelector('.search-bar input');
-  if (inputEl) {
-    inputEl.focus();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+const filteredBooks = computed(() => {
+  const gId = parseInt(selectedGroupTab.value, 10);
+  if (gId === -1 || isNaN(gId)) {
+    return bookStore.bookshelf;
   }
-}
+  return bookStore.bookshelf.filter(b => b.group === gId);
+});
 
-async function handleLogout() {
+const handleResize = () => {
+  windowWidth.value = window.innerWidth;
+};
+
+onMounted(async () => {
+  window.addEventListener('resize', handleResize);
+  if (isNight.value) {
+    document.body.classList.add('night-theme');
+  } else {
+    document.body.classList.remove('night-theme');
+  }
+  await Promise.all([
+    bookStore.fetchBookshelf(),
+    bookStore.fetchGroups()
+  ]);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize);
+});
+
+const toggleNight = () => {
+  isNight.value = !isNight.value;
+  localStorage.setItem('reader_night_mode', String(isNight.value));
+  if (isNight.value) {
+    document.body.classList.add('night-theme');
+  } else {
+    document.body.classList.remove('night-theme');
+  }
+};
+
+const handleSearch = () => {
+  if (!searchKeyword.value || !searchKeyword.value.trim()) {
+    isSearchResult.value = false;
+    return;
+  }
+  isSearchResult.value = true;
+  if (isMobile.value) {
+    showMobileNav.value = false;
+  }
+  bookStore.searchBooksStream(searchKeyword.value.trim());
+};
+
+const backToShelf = () => {
+  isSearchResult.value = false;
+  searchKeyword.value = '';
+};
+
+const refreshShelf = async () => {
+  refreshLoading.value = true;
   try {
-    await ElMessageBox.confirm('确定退出当前登录状态吗？', '退出确认', {
-      type: 'warning',
-      confirmButtonText: '确定退出',
-      cancelButtonText: '取消'
-    });
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('userToken');
-    localStorage.removeItem('userInfo');
-    sessionStorage.clear();
-    ElMessage.success('已安全退出');
-    router.push('/login');
-  } catch (e) {}
-}
+    await bookStore.fetchBookshelf();
+    ElMessage.success('书架已更新');
+  } finally {
+    refreshLoading.value = false;
+  }
+};
 
-function openBook(book) {
-  // 如果换源抽屉处于激活或正在关闭中，不进入正文
-  if (showSourceDrawer.value) return;
+const toDetail = (book) => {
   router.push({
     path: '/reader',
     query: {
       bookUrl: book.bookUrl,
+      tocUrl: book.tocUrl || book.bookUrl,
       name: book.name,
-      origin: book.origin,
       author: book.author || '',
-      index: book.durChapterIndex !== undefined && book.durChapterIndex !== null ? book.durChapterIndex : 0
+      origin: book.origin || '',
+      durChapterIndex: book.durChapterIndex !== undefined ? book.durChapterIndex : 0
     }
   });
-}
+};
 
-function openSearchResult(item) {
+const openChangeSource = (book) => {
   router.push({
     path: '/reader',
     query: {
-      bookUrl: item.bookUrl,
-      name: item.name,
-      origin: item.origin || '',
-      author: item.author || '',
-      coverUrl: item.coverUrl || item.cover || '',
-      search: '1'
+      bookUrl: book.bookUrl,
+      tocUrl: book.tocUrl || book.bookUrl,
+      name: book.name,
+      author: book.author || '',
+      origin: book.origin || '',
+      openSource: '1'
     }
   });
-}
+};
 
-function isBookInShelf(item) {
-  if (!item) return false;
-  return bookStore.bookshelf.some(b =>
-    (b.bookUrl && item.bookUrl && b.bookUrl === item.bookUrl) ||
-    (b.name && item.name && b.name === item.name && (!item.author || b.author === item.author))
+const deleteBook = (book) => {
+  ElMessageBox.confirm(`确定要将《${book.name}》从书架中移除吗？`, '删除确认', {
+    confirmButtonText: '确定删除',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(async () => {
+    try {
+      const res = await request.post('/reader3/deleteBook', { bookUrl: book.bookUrl });
+      if (res.data && res.data.isSuccess) {
+        ElMessage.success(`《${book.name}》已从书架移除`);
+        await bookStore.fetchBookshelf();
+      } else {
+        ElMessage.error(res.data?.msg || '删除失败');
+      }
+    } catch (e) {
+      ElMessage.error('删除书籍网络异常');
+    }
+  }).catch(() => {});
+};
+
+const isBookInShelf = (book) => {
+  return bookStore.bookshelf.some(
+    b => (b.bookUrl && b.bookUrl === book.bookUrl) ||
+         (b.name === book.name && b.author === book.author)
   );
-}
+};
 
-async function addSearchResultToShelf(item) {
-  if (isBookInShelf(item)) {
-    ElMessage.info(`《${item.name}》已在书架中`);
+const addSearchResultToShelf = async (book) => {
+  if (isBookInShelf(book)) {
+    ElMessage.info('本书已在书架中');
     return;
   }
   try {
     const payload = {
-      name: item.name,
-      author: item.author || '',
-      bookUrl: item.bookUrl,
-      tocUrl: item.tocUrl || item.bookUrl || '',
-      origin: item.origin || '',
-      originName: item.originName || item.origin || '',
-      coverUrl: item.coverUrl || item.cover || '',
-      latestChapterTitle: item.latestChapterTitle || ''
+      name: book.name,
+      author: book.author,
+      bookUrl: book.bookUrl,
+      tocUrl: book.tocUrl || book.bookUrl,
+      origin: book.origin,
+      originName: book.originName || book.origin,
+      coverUrl: book.coverUrl || book.cover,
+      intro: book.intro
     };
-    const res = await axios.post('/reader3/saveBook', payload);
+    const res = await request.post('/reader3/saveBook', payload);
     if (res.data && res.data.isSuccess) {
-      ElMessage.success(`🎉《${item.name}》已成功加入书架！`);
+      ElMessage.success(`《${book.name}》已成功加入书架`);
       await bookStore.fetchBookshelf();
     } else {
-      ElMessage.error(res.data?.errorMsg || '加入书架失败');
+      ElMessage.error(res.data?.msg || '加入书架失败');
     }
-  } catch (e) {
-    ElMessage.error('加入书架异常: ' + (e.message || ''));
+  } catch (err) {
+    ElMessage.error('加入书架网络异常');
   }
-}
+};
 
-function goToAdmin() {
-  router.push('/admin');
-}
+const openExplore = () => {
+  ElMessage.info('探索书源中心可前往后台管理');
+};
 
-function hasOfflineCache(bookUrl) {
-  const set = offlineStore.cachedIndicesMap[bookUrl];
-  return set && set.size > 0;
-}
+const handleAdminMenuCommand = (cmd) => {
+  if (cmd === 'admin') {
+    router.push('/admin');
+  } else if (cmd === 'stats') {
+    showStatsModal.value = true;
+  } else if (cmd === 'logout') {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('userToken');
+    ElMessage.success('已安全退出登录');
+    router.push('/login');
+  }
+};
 
-onMounted(async () => {
-  await bookStore.fetchBookshelf();
-  await bookStore.fetchGroups();
-});
+const getUnreadCount = (book) => {
+  if (book.totalChapterNum && book.durChapterIndex !== undefined) {
+    return Math.max(0, book.totalChapterNum - 1 - book.durChapterIndex);
+  }
+  return 0;
+};
+
+const formatTime = (ts) => {
+  if (!ts) return '最新';
+  const diff = Date.now() - Number(ts);
+  if (diff < 60000) return '刚刚';
+  if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前';
+  return Math.floor(diff / 86400000) + '天前';
+};
+
+const onCoverError = (e) => {
+  e.target.src = defaultCover;
+};
 </script>
 
 <style scoped>
-.bookshelf-page {
-  min-height: 100vh;
-  background: #0d1117;
-  color: #e6edf3;
-  padding: 16px;
+.index-wrapper {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  background-color: #ffffff;
+  color: #333333;
+}
+
+/* 导航栏 (左侧固定 260px) */
+.navigation-wrapper {
+  width: 260px;
+  min-width: 260px;
+  height: 100%;
+  box-sizing: border-box;
+  background-color: #f7f7f7;
+  position: relative;
+  z-index: 100;
+  transition: transform 0.3s ease;
+}
+
+.navigation-inner-wrapper {
+  padding: 48px 36px 66px 36px;
+  height: 100%;
+  overflow-y: auto;
   box-sizing: border-box;
 }
 
-.shelf-header {
-  background: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
-
-.shelf-card {
-  background: #161b22;
-  border: 1px solid #30363d;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s, border-color 0.2s;
-}
-
-.shelf-card:hover {
-  transform: translateY(-2px);
-  border-color: #388bfd;
-}
-
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 20px;
-  margin-bottom: 20px;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.logo-text {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-}
-
-.version-tag {
-  font-size: 10px;
-  background: #1f2937;
-  color: #10b981;
-  padding: 2px 6px;
-  border-radius: 4px;
-  border: 1px solid #374151;
+.navigation-title {
+  font-size: 24px;
   font-weight: 600;
+  color: #2c3e50;
+  line-height: 33px;
 }
 
-.search-bar {
-  flex: 1;
-  max-width: 500px;
+.navigation-title .version-text {
+  float: right;
+  font-size: 14px;
+  line-height: 33px;
+  font-weight: 400;
+  color: #b1b1b1;
+  display: inline-block;
+  cursor: pointer;
 }
 
-.header-right {
+.navigation-sub-title {
+  font-size: 16px;
+  font-weight: 500;
+  margin-top: 16px;
+  color: #b1b1b1;
+}
+
+.search-wrapper {
+  margin-top: 24px;
+}
+
+.search-input :deep(.el-input__inner) {
+  border-radius: 50px;
+  border-color: #e3e3e3;
+  padding-left: 32px;
+}
+
+.search-prefix-icon {
+  font-size: 14px;
+  color: #909399;
+}
+
+.setting-wrapper {
+  margin-top: 36px;
+}
+
+.setting-title {
+  font-size: 14px;
+  color: #b1b1b1;
+  margin-bottom: 8px;
+}
+
+.setting-item {
+  padding-top: 8px;
+}
+
+.setting-select {
+  width: 100%;
+}
+
+.bottom-icons {
+  position: absolute;
+  bottom: 30px;
+  width: 188px;
+  left: 36px;
   display: flex;
-  gap: 8px;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.nav-btn {
-  background: #21262d;
-  border: 1px solid #30363d;
-  color: #e6edf3;
+.theme-item {
+  line-height: 34px;
+  width: 36px;
+  height: 36px;
+  border-radius: 100%;
+  display: inline-block;
+  cursor: pointer;
+  text-align: center;
+  vertical-align: middle;
+  background-color: #e4e7ed;
+  font-size: 18px;
+  user-select: none;
+  transition: all 0.2s;
 }
 
-.search-results-section {
-  padding: 20px;
-  margin-bottom: 24px;
+.theme-item:hover {
+  transform: scale(1.08);
 }
 
-.section-header {
+.bottom-icon {
+  height: 36px;
+  display: flex;
+  align-items: center;
+}
+
+/* 右侧主书架展区 */
+.shelf-wrapper {
+  flex: 1;
+  height: 100%;
+  padding: 48px;
+  overflow-y: auto;
+  box-sizing: border-box;
+  background-color: #ffffff;
+}
+
+.shelf-title {
+  font-size: 24px;
+  font-weight: 600;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
+  color: #2c3e50;
 }
 
-.title-with-badge {
+.shelf-title-left {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.section-title {
+.mobile-menu-btn {
+  font-size: 22px;
+  cursor: pointer;
+  padding-right: 6px;
+}
+
+.stream-indicator {
+  font-size: 13px;
+  font-weight: 500;
+  color: #409eff;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.shelf-title-actions {
+  display: flex;
+  gap: 18px;
+  font-size: 15px;
+}
+
+.title-btn {
+  color: #409eff;
+  cursor: pointer;
+  font-weight: 500;
+  user-select: none;
+}
+
+.title-btn:hover {
+  color: #66b1ff;
+}
+
+.book-group-wrapper {
+  margin-bottom: 20px;
+}
+
+.book-group-tabs :deep(.el-tabs__header) {
+  margin-bottom: 0px;
+}
+
+.books-wrapper {
+  width: 100%;
+}
+
+.wrapper {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+/* 经典 360px x 112px 书籍卡片 */
+.book {
+  box-sizing: border-box;
+  width: 360px;
+  height: 112px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: row;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #ebeef5;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  transition: all 0.25s ease;
+}
+
+.book:hover {
+  background: rgba(0, 0, 0, 0.02);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.cover-img {
+  width: 80px;
+  height: 100%;
+  min-width: 80px;
+  margin-right: 16px;
+  border-radius: 2px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  position: relative;
+}
+
+.book-operation {
+  position: absolute;
+  right: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.op-icon {
+  font-size: 14px;
+  color: #909399;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.op-icon:hover {
+  color: #409eff;
+}
+
+.unread-num-badge {
+  background-color: #f56c6c;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 1px 6px;
+  border-radius: 10px;
+  line-height: 14px;
+}
+
+.name {
   font-size: 16px;
   font-weight: 600;
-}
-
-.search-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
-}
-
-.search-card {
-  display: flex;
-  gap: 12px;
-  padding: 12px;
-  cursor: pointer;
-}
-
-.search-card-cover {
-  width: 64px;
-  height: 88px;
-  border-radius: 6px;
-  overflow: hidden;
-  flex-shrink: 0;
-  background: #1e293b;
-}
-
-.search-card-cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.search-card-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-}
-
-.book-name {
-  font-size: 15px;
-  font-weight: 600;
-  color: #f8fafc;
+  color: #33373d;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 20px;
+  padding-right: 32px;
 }
 
-.book-author {
+.sub {
   font-size: 12px;
-  color: #94a3b8;
+  color: #969ba3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
 }
 
-.book-latest {
-  font-size: 11px;
-  color: #64748b;
+.dot {
+  margin: 0 2px;
+}
+
+.dur-chapter {
+  font-size: 12px;
+  color: #969ba3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  margin-top: 2px;
 }
 
-.book-source-tag {
-  display: flex;
-  gap: 6px;
-  font-size: 10px;
+.last-chapter {
+  font-size: 12px;
+  color: #969ba3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
 }
 
-.origin-tag {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  padding: 1px 6px;
-  border-radius: 4px;
-}
-
-.rt-tag {
-  background: rgba(6, 182, 212, 0.15);
-  color: #38bdf8;
-  padding: 1px 6px;
-  border-radius: 4px;
-}
-
-.search-card-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.card-btn {
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 11px;
+.source-tag-text {
+  color: #409eff;
   font-weight: 500;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.btn-preview {
-  background: rgba(88, 166, 255, 0.18);
-  color: #58a6ff;
-  border: 1px solid rgba(88, 166, 255, 0.35);
-}
-
-.btn-preview:hover {
-  background: rgba(88, 166, 255, 0.32);
-}
-
-.btn-shelf {
-  background: rgba(46, 160, 67, 0.18);
-  color: #3fb950;
-  border: 1px solid rgba(46, 160, 67, 0.35);
-}
-
-.btn-shelf:hover {
-  background: rgba(46, 160, 67, 0.32);
-}
-
-.btn-shelf.is-in-shelf {
-  background: rgba(16, 185, 129, 0.25);
-  color: #10b981;
-  border-color: rgba(16, 185, 129, 0.6);
-  cursor: default;
-}
-
-.group-tabs {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 12px;
-  margin-bottom: 16px;
-}
-
-.group-tab-btn {
-  padding: 6px 16px;
-  border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: #94a3b8;
-  font-size: 13px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.2s;
-}
-
-.group-tab-btn.active {
-  background: rgba(16, 185, 129, 0.2);
-  color: #34d399;
-  border-color: rgba(16, 185, 129, 0.4);
-  font-weight: 600;
-}
-
-.books-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 16px;
-}
-
-@media (min-width: 640px) {
-  .books-grid {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 20px;
-  }
-}
-
-.book-shelf-card {
-  display: flex;
-  flex-direction: column;
-  padding: 10px;
-  cursor: pointer;
-}
-
-.cover-wrapper {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 3 / 4;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #1e293b;
-  margin-bottom: 8px;
-}
-
-.cover-wrapper img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.offline-badge {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  background: rgba(16, 185, 129, 0.88);
-  color: #ffffff;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.shelf-book-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #f1f5f9;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-bottom: 4px;
-}
-
-.shelf-book-author {
+.source-time-text {
+  color: #67c23a;
   font-size: 11px;
-  color: #94a3b8;
-  margin-bottom: 4px;
 }
 
-.shelf-book-bottom-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+.search-card-bottom {
   margin-top: 4px;
 }
 
-.shelf-book-progress {
-  font-size: 10px;
-  color: #64748b;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-}
-
-.shelf-change-source-btn {
-  background: rgba(16, 185, 129, 0.1);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  border-radius: 4px;
-  padding: 1px 6px;
-  font-size: 10px;
-  font-weight: 500;
+.setting-connect {
   cursor: pointer;
-  flex-shrink: 0;
-  transition: all 0.2s;
+  font-weight: 500;
 }
 
-.shelf-change-source-btn:hover {
-  background: #10b981;
-  color: #fff;
+.setting-connect.in-shelf {
+  background-color: #f0f9eb;
+  border-color: #e1f3d8;
+  color: #67c23a;
 }
 
-.empty-shelf {
-  padding: 48px 20px;
+.empty-shelf-tip {
+  padding: 60px 20px;
   text-align: center;
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 12px;
-}
-
-.empty-text {
+  color: #909399;
   font-size: 14px;
-  color: #64748b;
+  width: 100%;
 }
 
-/* 移动端专属吸底导航栏与手机体验优化 */
-.mobile-bottom-nav {
-  display: none;
+/* 暗黑夜间主题 (.night) */
+.index-wrapper.night {
+  background-color: #121212;
+  color: #d1d5db;
 }
 
-@media (max-width: 768px) {
-  .bookshelf-page {
-    padding: 10px 10px calc(72px + env(safe-area-inset-bottom)) 10px;
-  }
-  .shelf-header {
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 10px 12px;
-  }
-  .header-left .version-tag {
-    display: none;
-  }
-  .search-bar {
-    order: 3;
-    width: 100%;
-    margin: 4px 0 0 0;
-  }
-  .current-user-tag {
-    max-width: 90px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .books-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 12px;
-  }
-  .search-grid {
-    grid-template-columns: 1fr !important;
-    gap: 10px;
-  }
-  .search-card {
-    padding: 10px;
-  }
+.index-wrapper.night .navigation-wrapper {
+  background-color: #181818;
+  border-right: 1px solid #222222;
+}
 
-  /* 移动端底部悬浮导航 */
-  .mobile-bottom-nav {
-    display: flex;
+.index-wrapper.night .navigation-title {
+  color: #e5e7eb;
+}
+
+.index-wrapper.night .shelf-wrapper {
+  background-color: #141414;
+}
+
+.index-wrapper.night .shelf-title {
+  color: #e5e7eb;
+}
+
+.index-wrapper.night .book {
+  background-color: #1e1e1e;
+  border-color: #2c2c2c;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+.index-wrapper.night .book:hover {
+  background-color: #262626;
+}
+
+.index-wrapper.night .name {
+  color: #e5e7eb;
+}
+
+.index-wrapper.night .theme-item {
+  background-color: #2d2d2d;
+  color: #ffd04b;
+}
+
+/* 响应式移动端适配 */
+@media screen and (max-width: 768px) {
+  .navigation-wrapper {
     position: fixed;
-    bottom: 0;
+    top: 0;
     left: 0;
-    right: 0;
-    height: calc(56px + env(safe-area-inset-bottom));
-    padding-bottom: env(safe-area-inset-bottom);
-    background: rgba(22, 27, 34, 0.96);
-    backdrop-filter: blur(12px);
-    border-top: 1px solid #30363d;
-    z-index: 1000;
-    justify-content: space-around;
-    align-items: center;
-  }
-  .mobile-bottom-nav .nav-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    flex: 1;
     height: 100%;
-    cursor: pointer;
-    color: #8b949e;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
+    transform: translateX(-100%);
+    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.2);
   }
-  .mobile-bottom-nav .nav-item:active {
-    transform: scale(0.92);
+
+  .navigation-wrapper.navigation-in {
+    transform: translateX(0);
   }
-  .mobile-bottom-nav .nav-item.active {
-    color: #34d399;
+
+  .nav-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 99;
   }
-  .mobile-bottom-nav .nav-item .icon {
-    font-size: 18px;
-    line-height: 1.2;
+
+  .shelf-wrapper {
+    padding: 20px 16px;
   }
-  .mobile-bottom-nav .nav-item .label {
-    font-size: 11px;
-    margin-top: 2px;
+
+  .book {
+    width: 100%;
   }
 }
 </style>
