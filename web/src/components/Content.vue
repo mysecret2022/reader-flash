@@ -1,4 +1,4 @@
-<script>
+<script lang="jsx">
 import { loadFont } from "../plugins/helper";
 export default {
   name: "Content",

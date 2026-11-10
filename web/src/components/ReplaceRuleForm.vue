@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     title="替换规则"
-    :visible.sync="show"
+    :model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"
     :width="dialogWidth"
     :top="dialogTop"
     :fullscreen="$store.state.miniInterface"
@@ -27,10 +27,10 @@
       <el-checkbox v-model="ruleForm.isRegex">使用正则表达式</el-checkbox>
       <el-checkbox v-model="ruleForm.isEnabled">是否启用</el-checkbox>
     </el-form>
-    <div slot="footer" class="dialog-footer">
+    <template #footer><div class="dialog-footer">
       <el-button size="medium" @click="cancel">取 消</el-button>
       <el-button size="medium" type="primary" @click="save">确 定</el-button>
-    </div>
+    </div></template>
   </el-dialog>
 </template>
 

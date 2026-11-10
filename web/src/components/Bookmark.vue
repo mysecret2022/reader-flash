@@ -1,6 +1,6 @@
 <template>
   <el-dialog
-    :visible.sync="show"
+    :model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"
     :width="dialogWidth"
     :top="dialogTop"
     :fullscreen="$store.state.miniInterface"
@@ -10,7 +10,7 @@
     v-if="$store.getters.isNormalPage"
     :before-close="cancel"
   >
-    <div class="custom-dialog-title" slot="title">
+    <template #title><div class="custom-dialog-title">
       <span class="el-dialog__title"
         >{{ this.book ? this.book.name : "" }} 书签管理
         <span class="float-right span-btn" @click="uploadFile">导入</span>
@@ -21,7 +21,7 @@
           style="display:none"
         />
       </span>
-    </div>
+    </div></template>
     <div class="source-container table-container">
       <el-table
         :data="bookmarkList"
@@ -39,7 +39,7 @@
           label="书籍"
           :fixed="$store.state.miniInterface"
         >
-          <template slot-scope="scope">
+          <template #default="scope">
             {{ scope.row.bookName }} - {{ scope.row.bookAuthor }}
           </template>
         </el-table-column>
@@ -50,7 +50,7 @@
         <el-table-column property="content" label="备注" min-width="150px">
         </el-table-column>
         <el-table-column label="操作" width="100px">
-          <template slot-scope="scope">
+          <template #default="scope">
             <el-button type="text" @click="showBookmark(scope.row)"
               >跳转</el-button
             >
@@ -61,7 +61,7 @@
         </el-table-column>
       </el-table>
     </div>
-    <div slot="footer" class="dialog-footer">
+    <template #footer><div class="dialog-footer">
       <el-button
         type="primary"
         size="medium"
@@ -71,7 +71,7 @@
       >
       <span class="check-tip">已选择 {{ localSelection.length }} 个</span>
       <el-button size="medium" @click="cancel">取消</el-button>
-    </div>
+    </div></template>
   </el-dialog>
 </template>
 

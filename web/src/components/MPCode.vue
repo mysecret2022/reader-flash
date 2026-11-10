@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     title="关注公众号【假装大佬】"
-    :visible.sync="show"
+    :model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"
     :width="dialogSmallWidth"
     :top="dialogTop"
     :fullscreen="$store.state.miniInterface"

@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     title="书架管理"
-    :visible.sync="show"
+    :model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"
     :width="dialogWidth"
     :top="dialogTop"
     :fullscreen="$store.state.miniInterface"
@@ -11,12 +11,12 @@
     v-if="$store.getters.isNormalPage"
     :before-close="cancel"
   >
-    <div class="custom-dialog-title" slot="title">
+    <template #title><div class="custom-dialog-title">
       <span class="el-dialog__title"
         >书架管理
         <span class="float-right small-tip">❗️只能缓存文本内容</span>
       </span>
-    </div>
+    </div></template>
     <div class="source-container table-container">
       <el-table
         :data="bookList"
@@ -36,7 +36,7 @@
           min-width="100"
           :fixed="$store.state.miniInterface"
         >
-          <template slot-scope="scope">
+          <template #default="scope">
             <el-button
               class="text-button"
               size="medium"
@@ -52,12 +52,12 @@
           min-width="100"
         ></el-table-column>
         <el-table-column label="分组" min-width="120">
-          <template slot-scope="scope">
+          <template #default="scope">
             {{ renderBookGroup(scope.row) }}
           </template>
         </el-table-column>
         <el-table-column label="章节" min-width="120">
-          <template slot-scope="scope">
+          <template #default="scope">
             <span>共 {{ scope.row.totalChapterNum }} 章</span><br />
             <span v-if="scope.row.origin !== 'loc_book'">
               服务器缓存： {{ scope.row.cachedChapterCount || 0 }} 章 <br
@@ -66,7 +66,7 @@
           </template>
         </el-table-column>
         <el-table-column label="操作" width="140px">
-          <template slot-scope="scope">
+          <template #default="scope">
             <el-button
               class="text-button"
               size="medium"
@@ -100,7 +100,7 @@
                   缓存<i class="el-icon-arrow-down el-icon--right"></i>
                 </span>
               </el-button>
-              <el-dropdown-menu slot="dropdown">
+              <template #dropdown><el-dropdown-menu>
                 <el-dropdown-item
                   v-if="scope.row.origin !== 'loc_book'"
                   command="cacheBookSSE"
@@ -117,22 +117,22 @@
                 <el-dropdown-item command="deleteBookLocalCache"
                   >删除浏览器缓存</el-dropdown-item
                 >
-              </el-dropdown-menu>
+              </el-dropdown-menu></template>
             </el-dropdown>
             <el-dropdown @command="exportBook(scope.row, $event)">
               <el-button class="text-button" type="text" size="medium">
                 导出<i class="el-icon-arrow-down el-icon--right"></i>
               </el-button>
-              <el-dropdown-menu slot="dropdown">
+              <template #dropdown><el-dropdown-menu>
                 <el-dropdown-item command="txt">导出为TXT</el-dropdown-item>
                 <el-dropdown-item command="epub">导出为Epub</el-dropdown-item>
-              </el-dropdown-menu>
+              </el-dropdown-menu></template>
             </el-dropdown>
           </template>
         </el-table-column>
       </el-table>
     </div>
-    <div slot="footer" class="dialog-footer">
+    <template #footer><div class="dialog-footer">
       <el-button
         type="primary"
         size="medium"
@@ -144,36 +144,36 @@
         <el-button type="primary" size="medium">
           批量添加分组<i class="el-icon-arrow-down el-icon--right"></i>
         </el-button>
-        <el-dropdown-menu slot="dropdown">
+        <template #dropdown><el-dropdown-menu>
           <el-dropdown-item
             v-for="(bookGroup, index) in bookGroupList"
             :key="'bookGroup-' + index"
             :command="bookGroup"
             >{{ bookGroup.groupName }}</el-dropdown-item
           >
-        </el-dropdown-menu>
+        </el-dropdown-menu></template>
       </el-dropdown>
       <el-dropdown class="float-left" @command="removeBookGroupMulti">
         <el-button type="primary" size="medium">
           批量移除分组<i class="el-icon-arrow-down el-icon--right"></i>
         </el-button>
-        <el-dropdown-menu slot="dropdown">
+        <template #dropdown><el-dropdown-menu>
           <el-dropdown-item
             v-for="(bookGroup, index) in bookGroupList"
             :key="'bookGroup-' + index"
             :command="bookGroup"
             >{{ bookGroup.groupName }}</el-dropdown-item
           >
-        </el-dropdown-menu>
+        </el-dropdown-menu></template>
       </el-dropdown>
       <span class="check-tip">已选择 {{ manageBookSelection.length }} 个</span>
       <el-button size="medium" @click="cancel">取消</el-button>
-    </div>
+    </div></template>
 
     <!-- 弹窗：从在线书源选择并替换书封面 -->
     <el-dialog
       title="修改书籍封面"
-      :visible.sync="showCoverPicker"
+      v-model="showCoverPicker"
       width="560px"
       append-to-body
       :before-close="() => (showCoverPicker = false)"

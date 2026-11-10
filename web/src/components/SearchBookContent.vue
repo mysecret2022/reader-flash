@@ -1,6 +1,6 @@
 <template>
   <el-dialog
-    :visible.sync="show"
+    :model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"
     :width="dialogWidth"
     :top="dialogTop"
     :fullscreen="$store.state.miniInterface"
@@ -11,7 +11,7 @@
     :before-close="cancel"
     @opened="opend"
   >
-    <div class="custom-dialog-title" slot="title">
+    <template #title><div class="custom-dialog-title">
       <span class="el-dialog__title">
         <span class="title-input">
           <el-input
@@ -19,13 +19,13 @@
             placeholder="搜索书籍内容"
             v-model="keyword"
             class="search-input"
-            @keyup.enter.native="searchBookContent(-1)"
+            @keyup.enter="searchBookContent(-1)"
           >
-            <i slot="prefix" class="el-input__icon el-icon-search"></i>
+            <template #prefix><i class="el-input__icon el-icon-search"></i></template>
           </el-input>
         </span>
       </span>
-    </div>
+    </div></template>
     <div class="source-container table-container">
       <el-table
         ref="resultTable"
@@ -43,7 +43,7 @@
         </el-table-column>
       </el-table>
     </div>
-    <div slot="footer" class="dialog-footer">
+    <template #footer><div class="dialog-footer">
       <el-button
         type="primary"
         size="medium"
@@ -61,7 +61,7 @@
         >跳转上次位置</el-button
       >
       <el-button size="medium" @click="cancel">取消</el-button>
-    </div>
+    </div></template>
   </el-dialog>
 </template>
 

@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     :title="isShowBookGroupSettingDialog ? '设置分组' : '分组管理'"
-    :visible.sync="show"
+    :model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"
     :width="dialogWidth"
     :top="dialogTop"
     :fullscreen="$store.state.miniInterface"
@@ -27,7 +27,7 @@
         >
         </el-table-column>
         <el-table-column property="groupName" label="分组名" min-width="100">
-          <template slot-scope="scope">
+          <template #default="scope">
             <div class="drag-icon">
               <i class="el-icon-rank"></i>
             </div>
@@ -40,7 +40,7 @@
           min-width="80"
           v-if="!isShowBookGroupSettingDialog"
         >
-          <template slot-scope="scope">
+          <template #default="scope">
             <el-switch
               v-model="scope.row.show"
               active-color="#13ce66"
@@ -53,7 +53,7 @@
           </template>
         </el-table-column>
         <el-table-column label="操作" width="100px">
-          <template slot-scope="scope">
+          <template #default="scope">
             <el-button type="text" @click="saveBookGroup(scope.row)"
               >编辑</el-button
             >
@@ -72,7 +72,7 @@
         </el-table-column>
       </el-table>
     </div>
-    <div slot="footer" class="dialog-footer">
+    <template #footer><div class="dialog-footer">
       <el-button
         type="primary"
         size="medium"
@@ -96,7 +96,7 @@
         >确认</el-button
       >
       <el-button size="medium" @click="cancel">取消</el-button>
-    </div>
+    </div></template>
   </el-dialog>
 </template>
 

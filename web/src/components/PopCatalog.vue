@@ -57,10 +57,10 @@
   </div>
 </template>
 
-<script>
+<script lang="jsx">
 import jump from "../plugins/jump";
 import Axios from "../plugins/axios";
-import Vue from "vue";
+import { h } from "vue";
 
 export default {
   name: "PopCata",
@@ -202,53 +202,19 @@ export default {
       var tocRuleList = this.tocRuleList;
       this.tocUrl = this.book.tocUrl;
       var catalog = this;
-      Vue.component("custComp2", {
-        render() {
-          window.custComp2 = this;
-          return (
-            <div style={{ textAlign: "center" }}>
-              <span>请选择规则：</span>
-              <el-select
-                size="mini"
-                vModel={this.selectedRule}
-                filterable={true}
-                placeholder="未分组"
-                vOn:change={this.change}
-              >
-                {tocRuleList.map((rule, index) => {
-                  return (
-                    <el-option
-                      key={"rule-" + index}
-                      label={rule.name}
-                      value={rule.rule}
-                    ></el-option>
-                  );
-                })}
-              </el-select>
-              <el-input
-                type="textarea"
-                rows={3}
-                style={{ marginTop: "10px" }}
-                vModel={this.selectedRule}
-                size="small"
-                vOn:change={this.change}
-              />
-            </div>
-          );
-        },
-        data() {
-          return {
-            selectedRule: catalog.tocUrl
-          };
-        },
-        methods: {
-          change() {
-            catalog.tocUrl = this.selectedRule;
+      return h("div", { style: { textAlign: "center" } }, [
+        h("span", "请选择规则："),
+        h("select", {
+          style: { padding: "4px 8px", borderRadius: "4px", border: "1px solid #ccc" },
+          value: catalog.tocUrl,
+          onChange: (e) => {
+            catalog.tocUrl = e.target.value;
           }
-        }
-      });
-      var custComp2 = Vue.component("custComp2");
-      return this.$createElement(custComp2);
+        }, [
+          h("option", { value: "" }, "请选择规则"),
+          ...tocRuleList.map(r => h("option", { value: r.rule }, r.name))
+        ])
+      ]);
     },
     jumpToCurrent(index) {
       if (typeof index === "undefined") {

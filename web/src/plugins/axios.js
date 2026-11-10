@@ -1,5 +1,5 @@
 import Axios from "axios";
-import { Message, MessageBox } from "element-ui";
+import { ElMessage as Message, ElMessageBox as MessageBox } from "element-plus";
 import { errorTypeList } from "./config";
 import store from "./vuex";
 

@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     :title="rssArticleInfo.title"
-    :visible.sync="show"
+    :model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"
     :width="dialogSmallWidth"
     :fullscreen="$store.state.miniInterface"
     :class="

@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     title="新增用户"
-    :visible.sync="show"
+    :model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"
     :width="dialogSmallWidth"
     :top="dialogTop"
     :fullscreen="$store.state.miniInterface"
@@ -21,14 +21,14 @@
           v-model="addUserForm.password"
           autocomplete="on"
           show-password
-          @keyup.enter.native="login"
+          @keyup.enter="login"
         ></el-input>
       </el-form-item>
     </el-form>
-    <div slot="footer" class="dialog-footer">
+    <template #footer><div class="dialog-footer">
       <el-button size="medium" @click="cancel">取 消</el-button>
       <el-button size="medium" type="primary" @click="save">确 定</el-button>
-    </div>
+    </div></template>
   </el-dialog>
 </template>
 

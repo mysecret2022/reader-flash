@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     title="书仓文件管理"
-    :visible.sync="show"
+    :model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"
     :width="dialogWidth"
     :top="dialogTop"
     :fullscreen="$store.state.miniInterface"
@@ -30,7 +30,7 @@
           label="文件名"
           :fixed="$store.state.miniInterface"
         >
-          <template slot-scope="scope">
+          <template #default="scope">
             <span v-if="!scope.row.isDirectory">{{ scope.row.name }}</span>
             <el-link
               type="primary"
@@ -53,7 +53,7 @@
           width="120px"
         ></el-table-column>
         <el-table-column label="操作" width="100px">
-          <template slot-scope="scope">
+          <template #default="scope">
             <el-button
               type="text"
               @click="deleteLocalStoreFile(scope.row)"
@@ -71,7 +71,7 @@
         </el-table-column>
       </el-table>
     </div>
-    <div slot="footer" class="dialog-footer">
+    <template #footer><div class="dialog-footer">
       <el-button
         type="primary"
         size="medium"
@@ -103,7 +103,7 @@
       />
       <span class="check-tip">已选择 {{ localFileSelection.length }} 个</span>
       <el-button size="medium" @click="cancel">取消</el-button>
-    </div>
+    </div></template>
   </el-dialog>
 </template>
 

@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     :title="rssSource.sourceName"
-    :visible.sync="show"
+    :model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"
     :width="dialogSmallWidth"
     :fullscreen="$store.state.miniInterface"
     :class="

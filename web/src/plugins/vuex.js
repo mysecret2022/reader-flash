@@ -1,8 +1,8 @@
-import Vue from "vue";
-import Vuex from "vuex";
+
+import { createStore } from "vuex";
 import settings, { customFonts, syncConfigFiled } from "./config";
 import { setCache, getCache } from "../plugins/cache";
-import { Message } from "element-ui";
+import { ElMessage as Message } from "element-plus";
 
 const defaultNS = [{ username: "默认", userNS: "default" }];
 const builtInBookGroup = [
@@ -11,7 +11,7 @@ const builtInBookGroup = [
   { groupId: -3, groupName: "音频", order: -8, show: true },
   { groupId: -4, groupName: "未分组", order: -7, show: true }
 ];
-Vue.use(Vuex);
+
 
 const getCurrentUserName = state => {
   return state.isManagerMode
@@ -19,7 +19,7 @@ const getCurrentUserName = state => {
     : (state.userInfo || {}).username || "default";
 };
 
-export default new Vuex.Store({
+export default createStore({
   state: {
     connected: false,
     api: getCache("api_prefix") || location.host + "/reader3",

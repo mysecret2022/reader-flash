@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     title="用户管理"
-    :visible.sync="show"
+    :model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"
     :width="dialogWidth"
     :top="dialogTop"
     :fullscreen="$store.state.miniInterface"
@@ -11,14 +11,14 @@
     v-if="$store.getters.isNormalPage"
     :before-close="cancel"
   >
-    <div class="custom-dialog-title" slot="title">
+    <template #title><div class="custom-dialog-title">
       <span class="el-dialog__title"
         >用户管理
         <span class="float-right span-btn" @click="showAddUserDialog()"
           >新增</span
         >
       </span>
-    </div>
+    </div></template>
     <div class="source-container table-container">
       <el-table
         :data="userList"
@@ -51,7 +51,7 @@
           min-width="120"
         ></el-table-column>
         <el-table-column property="enableWebdav" label="WebDAV" min-width="80">
-          <template slot-scope="scope">
+          <template #default="scope">
             <el-switch
               v-if="scope.row.userNS !== 'default'"
               v-model="scope.row.enableWebdav"
@@ -69,7 +69,7 @@
           label="书仓"
           min-width="80"
         >
-          <template slot-scope="scope">
+          <template #default="scope">
             <el-switch
               v-if="scope.row.userNS !== 'default'"
               v-model="scope.row.enableLocalStore"
@@ -83,7 +83,7 @@
           </template>
         </el-table-column>
         <el-table-column label="操作" width="100px">
-          <template slot-scope="scope">
+          <template #default="scope">
             <el-button type="text" @click="resetPassword(scope.row)"
               >重置密码</el-button
             >
@@ -94,7 +94,7 @@
         </el-table-column>
       </el-table>
     </div>
-    <div slot="footer" class="dialog-footer">
+    <template #footer><div class="dialog-footer">
       <el-button
         type="primary"
         size="medium"
@@ -111,7 +111,7 @@
       >
       <span class="check-tip">已选择 {{ manageUserSelection.length }} 个</span>
       <el-button size="medium" @click="cancel">取消</el-button>
-    </div>
+    </div></template>
   </el-dialog>
 </template>
 

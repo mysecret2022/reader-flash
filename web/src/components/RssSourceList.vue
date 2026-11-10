@@ -1,6 +1,6 @@
 <template>
   <el-dialog
-    :visible.sync="show"
+    :model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"
     :width="dialogSmallWidth"
     :fullscreen="$store.state.miniInterface"
     :class="
@@ -8,7 +8,7 @@
     "
     :before-close="cancel"
   >
-    <div class="custom-dialog-title" slot="title">
+    <template #title><div class="custom-dialog-title">
       <span class="el-dialog__title"
         >RSS订阅({{ rssSourceList.length }})
         <span
@@ -27,7 +27,7 @@
         @change="onSourceFileChange($event, true)"
         style="display:none"
       />
-    </div>
+    </div></template>
     <div class="rss-source-list-container">
       <div
         class="rss-source"
