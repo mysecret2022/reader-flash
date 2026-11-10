@@ -81,6 +81,7 @@
         class="scroll-mode-container"
         ref="scrollContainer"
         :style="{ maxWidth: `${readerStore.readWidth || 800}px` }"
+        @click="handleScrollModeClick"
       >
         <h2 class="chapter-heading">{{ currentChapter?.title }}</h2>
         <div class="chapter-body">
@@ -304,6 +305,19 @@
 
     <!-- 弹窗组件：阅读统计与阅读时长勋章 -->
     <ReadingStatsModal v-model="showStatsModal" />
+
+    <!-- 常驻智能操作浮条 (在控制栏收起时贴心浮现，1键即开换源、设置与菜单，防止用户找不到入口) -->
+    <div v-if="!showControls" class="floating-quick-bar" @click.stop>
+      <button class="float-pill-btn primary" @click.stop="showBookSourceDrawer = true" title="快速换源">
+        🔀 换源
+      </button>
+      <button class="float-pill-btn" @click.stop="showSettingsDrawer = true" title="排版与主题设置">
+        ⚙️ 设置
+      </button>
+      <button class="float-pill-btn" @click.stop="showControls = true" title="呼出顶部与底部控制栏">
+        ☰ 菜单
+      </button>
+    </div>
   </div>
 </template>
 
@@ -538,27 +552,55 @@ function onTouchEnd(e) {
       // 向右滑 -> 上一页
       prevPageWithAnimation();
     }
+    // 滑动完成后延时重置滑动标志，避免连带触发随后的 click 事件
+    setTimeout(() => {
+      isSwipeAction = false;
+    }, 150);
+  } else {
+    // 触摸轻触 Tap 判定 (微小位移且用时短暂)
+    if (Math.abs(deltaX) < 15 && elapsed < 350) {
+      const width = window.innerWidth;
+      const tapX = touchStartX;
+      if (tapX < width * 0.25) {
+        prevPageWithAnimation();
+      } else if (tapX > width * 0.75) {
+        nextPageWithAnimation();
+      } else {
+        // 点击正中 50% 呼出/收起控制栏
+        showControls.value = !showControls.value;
+      }
+    }
   }
 }
 
 function handlePageTapArea(e) {
-  // 如果是滑动操作刚结束，则不视作点击
-  if (isSwipeAction) return;
+  // 如果刚发生过滑动操作，忽略附带的 click
+  if (isSwipeAction) {
+    isSwipeAction = false;
+    return;
+  }
+  if (selectedText.value) return;
 
   statsStore.recordActivity();
   const width = window.innerWidth;
-  const clickX = e.clientX;
+  const clickX = (e && typeof e.clientX === 'number' && e.clientX > 0) ? e.clientX : touchStartX;
 
-  if (clickX < width * 0.3) {
-    // 点击左侧 30% -> 上一页
+  if (clickX < width * 0.25) {
+    // 点击左侧 25% -> 上一页
     prevPageWithAnimation();
-  } else if (clickX > width * 0.7) {
-    // 点击右侧 30% -> 下一页
+  } else if (clickX > width * 0.75) {
+    // 点击右侧 25% -> 下一页
     nextPageWithAnimation();
   } else {
-    // 点击中间 40% -> 唤出/收起控制面板
+    // 点击中间 50% -> 唤出/收起控制面板
     showControls.value = !showControls.value;
   }
+}
+
+function handleScrollModeClick(e) {
+  if (selectedText.value) return;
+  statsStore.recordActivity();
+  showControls.value = !showControls.value;
 }
 
 function nextPageWithAnimation() {
@@ -781,9 +823,11 @@ function saveProgress(idx) {
   } catch (e) {}
 }
 
-function handleContainerClick() {
-  // 点击空白处记录活跃度
+function handleContainerClick(e) {
+  if (selectedText.value) return;
   statsStore.recordActivity();
+  // 点击页面空白处或边缘时切换控制栏
+  showControls.value = !showControls.value;
 }
 
 function handleKeyDown(e) {
@@ -793,6 +837,8 @@ function handleKeyDown(e) {
     nextPageWithAnimation();
   } else if (e.key === 'Escape') {
     showControls.value = false;
+  } else if (e.key === 'm' || e.key === 'M' || e.key === ' ') {
+    showControls.value = !showControls.value;
   }
 }
 
@@ -1416,5 +1462,54 @@ onUnmounted(() => {
 
 .bubble-btn:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+
+/* 常驻智能操作浮条 */
+.floating-quick-bar {
+  position: fixed;
+  bottom: 22px;
+  right: 18px;
+  z-index: 95;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--reader-panel, rgba(255, 255, 255, 0.94));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 5px 8px;
+  border-radius: 24px;
+  border: 1px solid var(--reader-border, rgba(0, 0, 0, 0.12));
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+  user-select: none;
+}
+
+.float-pill-btn {
+  background: none;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--reader-text, #262626);
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 14px;
+  transition: all 0.18s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.float-pill-btn:hover {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.float-pill-btn.primary {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.float-pill-btn.primary:hover {
+  background: #059669;
 }
 </style>
