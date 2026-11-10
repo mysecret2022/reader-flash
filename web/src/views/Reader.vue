@@ -10,7 +10,7 @@
   >
     <!-- 顶部状态栏信息 (书名、章节名、离线标记) -->
     <header class="reader-top-bar" :class="{ 'bar-visible': showControls }">
-      <div class="top-bar-content glass-panel">
+      <div class="top-bar-content matte-control-panel">
         <button class="icon-btn" @click.stop="goBack">‹ 返回书架</button>
         <span class="top-title">{{ bookName }} - {{ currentChapter?.title || '加载中...' }}</span>
         <div class="top-actions">
@@ -76,7 +76,7 @@
 
     <!-- 底部控制面板抽屉 -->
     <footer class="reader-bottom-bar" :class="{ 'bar-visible': showControls }">
-      <div class="bottom-bar-content glass-panel" @click.stop>
+      <div class="bottom-bar-content matte-control-panel" @click.stop>
         <!-- 章节滑动跳转条 -->
         <div class="progress-slider-row">
           <button class="step-btn" @click="prevChapter">‹ 上一章</button>
@@ -275,10 +275,11 @@ let speechUtterance = null;
 let statsTimer = null;
 
 const themes = [
-  { id: 0, name: '晨曦白' },
+  { id: 0, name: '象牙白' },
   { id: 1, name: '羊皮纸' },
   { id: 2, name: '护眼绿' },
-  { id: 3, name: '深邃夜' }
+  { id: 3, name: '深邃夜' },
+  { id: 4, name: '水墨灰' }
 ];
 
 const currentChapter = computed(() => {
@@ -643,10 +644,11 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-.theme-btn-0 { background: #faf9f6; }
-.theme-btn-1 { background: #f5eedc; }
-.theme-btn-2 { background: #e5f1e3; }
-.theme-btn-3 { background: #0f172a; }
+.theme-btn-0 { background: #fbfaf7; }
+.theme-btn-1 { background: #f3edd9; }
+.theme-btn-2 { background: #dcead4; }
+.theme-btn-3 { background: #141518; }
+.theme-btn-4 { background: #e5e6e8; }
 
 .theme-color-btn.active {
   border-color: #10b981;

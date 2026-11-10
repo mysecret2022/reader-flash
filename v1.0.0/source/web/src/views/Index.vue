@@ -1,9 +1,9 @@
 <template>
   <div class="bookshelf-page">
-    <!-- 顶部极光毛玻璃导航栏 -->
-    <header class="app-header glass-panel">
+    <!-- 顶部专业导航栏 -->
+    <header class="app-header shelf-header">
       <div class="header-left">
-        <span class="logo-text mint-glow-title">⚡ reader-flash</span>
+        <span class="logo-text">⚡ Reader</span>
         <span class="version-tag">极速版</span>
       </div>
 
@@ -27,6 +27,9 @@
       </div>
 
       <div class="header-right">
+        <el-button class="nav-btn" circle @click="$router.push('/login')" title="用户登录 (毛玻璃)">
+          👤
+        </el-button>
         <el-button class="nav-btn" circle @click="showStatsModal = true" title="个人阅读数据与成就">
           📊
         </el-button>
@@ -37,7 +40,7 @@
     </header>
 
     <!-- 流式搜索结果展区 (搜索激活时浮现) -->
-    <section v-if="bookStore.searchKeyword" class="search-results-section glass-panel">
+    <section v-if="bookStore.searchKeyword" class="search-results-section shelf-card">
       <div class="section-header">
         <div class="title-with-badge">
           <span class="section-title">🔍 搜索结果: “{{ bookStore.searchKeyword }}”</span>
@@ -55,7 +58,7 @@
         <div
           v-for="(item, idx) in bookStore.searchResults"
           :key="idx"
-          class="search-card glass-card"
+          class="search-card shelf-card"
           @click="openSearchResult(item)"
         >
           <div class="search-card-cover">
@@ -97,7 +100,7 @@
       </div>
 
       <!-- 书架书籍卡片瀑布流网格 -->
-      <div v-if="bookStore.filteredBooks.length === 0" class="empty-shelf glass-card">
+      <div v-if="bookStore.filteredBooks.length === 0" class="empty-shelf shelf-card">
         <div class="empty-icon">📚</div>
         <div class="empty-text">书架空空如也，快去上方搜搜精彩小说吧</div>
       </div>
@@ -106,7 +109,7 @@
         <div
           v-for="book in bookStore.filteredBooks"
           :key="book.bookUrl"
-          class="book-shelf-card glass-card"
+          class="book-shelf-card shelf-card"
           @click="openBook(book)"
         >
           <!-- 封面图与离线角标 -->
@@ -191,12 +194,30 @@ onMounted(async () => {
 <style scoped>
 .bookshelf-page {
   min-height: 100vh;
-  background: radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.05) 0%, transparent 40%),
-              radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.05) 0%, transparent 40%),
-              #0f172a;
-  color: #f1f5f9;
+  background: #0d1117;
+  color: #e6edf3;
   padding: 16px;
   box-sizing: border-box;
+}
+
+.shelf-header {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.shelf-card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.shelf-card:hover {
+  transform: translateY(-2px);
+  border-color: #388bfd;
 }
 
 .app-header {
@@ -216,15 +237,18 @@ onMounted(async () => {
 }
 
 .logo-text {
-  font-size: 20px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
 }
 
 .version-tag {
   font-size: 10px;
-  background: rgba(16, 185, 129, 0.2);
-  color: #34d399;
+  background: #1f2937;
+  color: #10b981;
   padding: 2px 6px;
-  border-radius: 6px;
+  border-radius: 4px;
+  border: 1px solid #374151;
   font-weight: 600;
 }
 
@@ -239,9 +263,9 @@ onMounted(async () => {
 }
 
 .nav-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #f8fafc;
+  background: #21262d;
+  border: 1px solid #30363d;
+  color: #e6edf3;
 }
 
 .search-results-section {

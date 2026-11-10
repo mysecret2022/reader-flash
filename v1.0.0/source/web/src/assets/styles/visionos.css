@@ -1,103 +1,55 @@
 /**
- * reader-flash VisionOS 极光薄荷荧光毛玻璃现代设计系统
- * 兼顾通透高级感、极低 GPU/CPU 负载与舒适护眼阅读排版
+ * reader-flash 视觉与阅读排版系统
+ * 规范：
+ * 1. 登录界面 (Login)：保留纯粹高透的毛玻璃 (Frosted Glass) 悬浮流萤美学。
+ * 2. 控制台 (Admin)：专业企业级管理控制台背景，数据清晰、排版严谨、零眩光干扰。
+ * 3. 阅读界面 (Reader)：出版级纯正专业纸质阅读背景（象牙白、羊皮纸、护眼绿、深邃夜、水墨灰），纯净舒适，防视疲劳。
  */
 
 :root {
   --primary-color: #10b981;
   --primary-hover: #059669;
   --primary-glow: rgba(16, 185, 129, 0.25);
-  --glass-bg: rgba(255, 255, 255, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.4);
-  --glass-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.08);
   --reader-font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
-/* 深色模式全局变量 */
-.dark, [data-theme="dark"] {
-  --glass-bg: rgba(15, 23, 42, 0.78);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
-  --primary-glow: rgba(52, 211, 153, 0.2);
+/* ========================================================
+   1. 出版级 5 套专业阅读背景 (专为沉浸阅读打磨，无反光与眩光)
+   ======================================================== */
+
+/* 主题 0: 经典象牙白 (Ivory White) - 清新纯净，纸墨分明，日常白天首选 */
+.reader-theme-0 {
+  background-color: #fbfaf7 !important;
+  color: #2b2b2b !important;
 }
 
-/* 毛玻璃悬浮面板 */
-.glass-panel {
-  background: var(--glass-bg);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
-  border-radius: 16px;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+/* 主题 1: 传统羊皮纸 (Vintage Parchment) - 温润古典书卷质感，还原实体书纸张 */
+.reader-theme-1 {
+  background-color: #f3edd9 !important;
+  color: #3d2e1e !important;
 }
 
-.glass-card {
-  background: var(--glass-bg);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--glass-border);
-  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
-  border-radius: 14px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+/* 主题 2: 医学护眼绿 (Eye-care Sage Green) - 柔和低反光豆沙绿，长久阅读抗视疲劳 */
+.reader-theme-2 {
+  background-color: #dcead4 !important;
+  color: #1c3420 !important;
 }
 
-.glass-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 30px -4px rgba(16, 185, 129, 0.15);
-  border-color: rgba(16, 185, 129, 0.3);
+/* 主题 3: 专业深邃夜 (OLED True Night) - 柔和深暗黑，夜间阅读防刺眼眩光 */
+.reader-theme-3 {
+  background-color: #141518 !important;
+  color: #a6abb4 !important;
 }
 
-/* 极光薄荷荧光标题与徽章 */
-.mint-glow-title {
-  background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+/* 主题 4: 电子水墨灰 (E-Ink Paper) - 模拟电子水墨屏的高清晰度与温和质感 */
+.reader-theme-4 {
+  background-color: #e5e6e8 !important;
+  color: #222426 !important;
 }
 
-.mint-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(16, 185, 129, 0.12);
-  color: #059669;
-  border: 1px solid rgba(16, 185, 129, 0.25);
-  border-radius: 9999px;
-  padding: 2px 8px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.dark .mint-badge {
-  color: #34d399;
-  background: rgba(52, 211, 153, 0.12);
-  border-color: rgba(52, 211, 153, 0.25);
-}
-
-/* 阅读器 4 套预设舒适主题 */
-.reader-theme-0 { /* 白天晨曦 */
-  background-color: #faf9f6 !important;
-  color: #27272a !important;
-}
-
-.reader-theme-1 { /* 羊皮纸经典 */
-  background-color: #f5eedc !important;
-  color: #382b1d !important;
-}
-
-.reader-theme-2 { /* 护眼竹青 */
-  background-color: #e5f1e3 !important;
-  color: #1e331c !important;
-}
-
-.reader-theme-3 { /* 深邃暗黑夜间 */
-  background-color: #0f172a !important;
-  color: #94a3b8 !important;
-}
-
-/* 3D 纸张仿真翻页容器与双面投影 */
+/* ========================================================
+   2. 3D 纸张仿真翻页容器与双面投影 (实体纸质触感)
+   ======================================================== */
 .simulation-flip-container {
   position: relative;
   width: 100%;
@@ -116,6 +68,18 @@
   transform-origin: left center;
   backface-visibility: hidden;
   will-change: transform;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* ========================================================
+   3. 专业阅读控制条 (Matte Finish 实色哑光，杜绝底层文字透光干扰)
+   ======================================================== */
+.matte-control-panel {
+  background: #181c24;
+  border: 1px solid #2d3340;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  border-radius: 14px;
+  color: #f1f5f9;
 }
 
 /* 自研选词划线与快捷胶囊菜单 */
@@ -126,12 +90,10 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: rgba(15, 23, 42, 0.92);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: #181c24;
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 9999px;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.45);
   color: #ffffff;
   font-size: 13px;
   transform: translate(-50%, -100%);

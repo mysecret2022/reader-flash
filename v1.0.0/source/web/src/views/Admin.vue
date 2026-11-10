@@ -1,7 +1,7 @@
 <template>
   <div class="admin-container" :class="isDark ? 'theme-dark' : 'theme-light'">
     <!-- 顶部导航栏 (Reader 官方风格) -->
-    <header class="admin-header glass-panel">
+    <header class="admin-header">
       <div class="header-left">
         <div class="brand-logo" @click="$router.push('/')">
           <span class="brand-icon">⚡</span>
@@ -34,7 +34,7 @@
 
     <!-- 主体区域：侧边菜单 + 内容视窗 -->
     <div class="admin-body">
-      <aside class="admin-sidebar glass-panel">
+      <aside class="admin-sidebar">
         <div class="sidebar-nav-list">
           <div
             v-for="item in navItems"
@@ -49,7 +49,7 @@
         </div>
       </aside>
 
-      <main class="admin-main glass-card">
+      <main class="admin-main">
         <!-- 1. 系统概览与配置管理 -->
         <section v-if="activeTab === 'overview'" class="tab-pane">
           <div class="pane-header">
@@ -59,7 +59,7 @@
 
           <!-- 4 个核心指标卡片 -->
           <div class="stat-cards">
-            <div class="stat-card glass-card">
+            <div class="stat-card admin-card">
               <div class="stat-icon bg-blue">👥</div>
               <div class="stat-info">
                 <div class="stat-value">{{ userList.length }} <span class="stat-unit">/ {{ systemConfig.userLimit || 10 }} 人</span></div>
@@ -67,7 +67,7 @@
               </div>
             </div>
 
-            <div class="stat-card glass-card">
+            <div class="stat-card admin-card">
               <div class="stat-icon bg-green">📚</div>
               <div class="stat-info">
                 <div class="stat-value">{{ sources.length }} <span class="stat-unit">源</span></div>
@@ -75,7 +75,7 @@
               </div>
             </div>
 
-            <div class="stat-card glass-card">
+            <div class="stat-card admin-card">
               <div class="stat-icon bg-purple">📖</div>
               <div class="stat-info">
                 <div class="stat-value">{{ bookshelfList.length }} <span class="stat-unit">本</span></div>
@@ -83,7 +83,7 @@
               </div>
             </div>
 
-            <div class="stat-card glass-card">
+            <div class="stat-card admin-card">
               <div class="stat-icon bg-amber">⚡</div>
               <div class="stat-info">
                 <div class="stat-value">LRU 极速</div>
@@ -93,7 +93,7 @@
           </div>
 
           <!-- 快速配置表单 -->
-          <div class="config-section glass-card" style="margin-top: 20px;">
+          <div class="config-section admin-card" style="margin-top: 20px;">
             <h3 class="section-title">⚙️ 系统多用户鉴权设置</h3>
             <el-form label-width="140px" style="max-width: 600px; margin-top: 15px;">
               <el-form-item label="多用户鉴权模式">
@@ -131,7 +131,7 @@
           </div>
 
           <!-- 工具栏 -->
-          <div class="toolbar glass-card">
+          <div class="toolbar admin-toolbar">
             <el-input
               v-model="sourceKeyword"
               placeholder="搜索书源名称或域名..."
@@ -280,7 +280,7 @@
             <h2 class="pane-title">WebDAV 云端双向备份</h2>
           </div>
 
-          <div class="glass-card" style="max-width: 600px; padding: 20px;">
+          <div class="admin-card" style="max-width: 600px; padding: 20px;">
             <el-form label-width="130px">
               <el-form-item label="WebDAV 服务器">
                 <el-input v-model="webdavConfig.url" placeholder="如 https://dav.jianguoyun.com/dav/reader/" clearable />
@@ -308,7 +308,7 @@
             </div>
           </div>
 
-          <div class="log-terminal glass-card">
+          <div class="log-terminal">
             <pre class="log-content">{{ logsText || '暂无最近日志输出或日志目录为空...' }}</pre>
           </div>
         </section>
@@ -745,19 +745,20 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 专业企业级控制台风格 (无反光模糊，数据清晰分明) */
 .admin-container {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #0f172a;
-  color: #f8fafc;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  transition: all 0.3s ease;
+  background: #0d1117;
+  color: #e6edf3;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  transition: all 0.25s ease;
 }
 
 .theme-light {
-  background: #f1f5f9;
-  color: #1e293b;
+  background: #f6f8fa;
+  color: #1f2328;
 }
 
 .admin-header {
@@ -766,7 +767,13 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+}
+
+.theme-light .admin-header {
+  background: #ffffff;
+  border-bottom: 1px solid #d0d7de;
 }
 
 .brand-logo {
@@ -777,22 +784,28 @@ onMounted(() => {
 }
 
 .brand-icon {
-  font-size: 22px;
+  font-size: 20px;
 }
 
 .brand-title {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.5px;
 }
 
 .brand-badge {
   font-size: 11px;
-  background: rgba(16, 185, 129, 0.15);
+  background: #1f2937;
   color: #10b981;
   padding: 2px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  border: 1px solid #374151;
+}
+
+.theme-light .brand-badge {
+  background: #ecfdf5;
+  color: #059669;
+  border-color: #a7f3d0;
 }
 
 .header-right {
@@ -809,44 +822,64 @@ onMounted(() => {
 
 .admin-sidebar {
   width: 220px;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: #161b22;
+  border-right: 1px solid #30363d;
   padding: 16px 8px;
+}
+
+.theme-light .admin-sidebar {
+  background: #ffffff;
+  border-right: 1px solid #d0d7de;
 }
 
 .sidebar-nav-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .sidebar-nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  border-radius: 8px;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 6px;
   cursor: pointer;
-  color: #94a3b8;
+  color: #8b949e;
   font-size: 14px;
   font-weight: 500;
   transition: all 0.2s ease;
 }
 
+.theme-light .sidebar-nav-item {
+  color: #57606a;
+}
+
 .sidebar-nav-item:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #f8fafc;
+  background: #21262d;
+  color: #f0f6fc;
+}
+
+.theme-light .sidebar-nav-item:hover {
+  background: #f3f4f6;
+  color: #1f2328;
 }
 
 .sidebar-nav-item.active {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: #1f6feb;
+  color: #ffffff;
+  font-weight: 600;
 }
 
 .admin-main {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
+  background: #0d1117;
+}
+
+.theme-light .admin-main {
+  background: #f6f8fa;
 }
 
 .pane-header {
@@ -859,12 +892,27 @@ onMounted(() => {
 .pane-title {
   font-size: 18px;
   font-weight: 600;
+  margin: 0;
 }
 
+/* 专业数据卡片 */
 .stat-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
+}
+
+.admin-card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.theme-light .admin-card {
+  background: #ffffff;
+  border: 1px solid #d0d7de;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .stat-card {
@@ -872,17 +920,16 @@ onMounted(() => {
   align-items: center;
   gap: 16px;
   padding: 18px;
-  border-radius: 12px;
 }
 
 .stat-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 22px;
+  font-size: 20px;
 }
 
 .bg-blue { background: rgba(59, 130, 246, 0.15); }
@@ -891,30 +938,46 @@ onMounted(() => {
 .bg-amber { background: rgba(245, 158, 11, 0.15); }
 
 .stat-value {
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
 }
 
 .stat-unit {
   font-size: 13px;
-  color: #94a3b8;
+  color: #8b949e;
+  font-weight: normal;
+}
+
+.theme-light .stat-unit {
+  color: #6e7781;
 }
 
 .stat-label {
   font-size: 12px;
-  color: #94a3b8;
+  color: #8b949e;
   margin-top: 2px;
 }
 
-.toolbar {
+.theme-light .stat-label {
+  color: #6e7781;
+}
+
+.admin-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-radius: 10px;
+  border-radius: 8px;
   margin-bottom: 16px;
   gap: 12px;
   flex-wrap: wrap;
+  background: #161b22;
+  border: 1px solid #30363d;
+}
+
+.theme-light .admin-toolbar {
+  background: #ffffff;
+  border: 1px solid #d0d7de;
 }
 
 .toolbar-actions {
@@ -925,17 +988,18 @@ onMounted(() => {
 
 .log-terminal {
   border-radius: 8px;
-  background: #090d16;
+  background: #010409;
+  border: 1px solid #30363d;
   padding: 16px;
   height: 600px;
   overflow: auto;
 }
 
 .log-content {
-  font-family: monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #38bdf8;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #58a6ff;
   white-space: pre-wrap;
   margin: 0;
 }
@@ -943,7 +1007,11 @@ onMounted(() => {
 .form-tip {
   margin-left: 12px;
   font-size: 12px;
-  color: #94a3b8;
+  color: #8b949e;
+}
+
+.theme-light .form-tip {
+  color: #6e7781;
 }
 
 @media (max-width: 768px) {
