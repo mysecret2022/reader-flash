@@ -140,8 +140,8 @@
               style="max-width: 260px;"
             />
             <div class="toolbar-actions">
-              <el-button size="small" type="success" plain @click="testSourcesHealth">
-                🩺 一键体检
+              <el-button size="small" type="success" :loading="healthChecking" plain @click="testSourcesHealth">
+                🩺 多线程并发体检
               </el-button>
               <el-button size="small" type="warning" plain @click="toggleAllSources(true)">
                 ✅ 全部启用
@@ -150,8 +150,45 @@
                 ⏸️ 全部停用
               </el-button>
               <el-button size="small" type="danger" plain @click="deleteDisabledSources">
-                🗑️ 清理已失效源
+                🗑️ 清理停用源
               </el-button>
+            </div>
+          </div>
+
+          <!-- 多线程并发体检可见进度条卡片 (用户需求 2 & 3) -->
+          <div v-if="healthChecking || healthCheckFinished" class="health-progress-card">
+            <div class="progress-bar-header">
+              <div class="progress-title">
+                <span class="pulsing-indicator" :class="{ 'is-active': healthChecking }"></span>
+                <span class="title-text">{{ healthChecking ? '⚡ 多线程并发深度体检中...' : '✅ 体检已完成' }}</span>
+                <span class="progress-ratio">({{ healthCheckStats.current }} / {{ healthCheckStats.total }})</span>
+              </div>
+              <div class="progress-actions">
+                <span v-if="healthChecking" class="detecting-name" :title="healthCheckStats.currentSourceName">
+                  正在探测: {{ healthCheckStats.currentSourceName || '并发连接调度中...' }}
+                </span>
+                <el-button v-if="healthChecking" size="small" type="danger" plain @click="stopHealthCheck">
+                  ⏹ 停止体检
+                </el-button>
+                <el-button v-if="healthCheckStats.dead > 0" size="small" type="warning" plain @click="purgeDeadSources">
+                  🧹 一键清理 {{ healthCheckStats.dead }} 个失效源
+                </el-button>
+              </div>
+            </div>
+
+            <el-progress
+              :percentage="healthCheckProgress"
+              :status="healthCheckProgress === 100 ? 'success' : ''"
+              :stroke-width="14"
+              :text-inside="true"
+              class="health-progress-bar"
+            />
+
+            <div class="progress-stat-pills">
+              <span class="stat-pill good">🟢 优质可用: {{ healthCheckStats.good }}</span>
+              <span class="stat-pill slow">🟡 响应较慢: {{ healthCheckStats.slow }}</span>
+              <span class="stat-pill dead">🔴 无法访问: {{ healthCheckStats.dead }}</span>
+              <span class="stat-pill total">📊 书源总数: {{ healthCheckStats.total }}</span>
             </div>
           </div>
 
@@ -163,10 +200,10 @@
               </template>
             </el-table-column>
             <el-table-column prop="bookSourceUrl" label="书源地址" min-width="220" show-overflow-tooltip />
-            <el-table-column label="健康度" width="100">
+            <el-table-column label="健康度" width="110">
               <template #default="{ row }">
-                <el-tag size="small" :type="row.health === 'good' ? 'success' : row.health === 'dead' ? 'danger' : 'info'">
-                  {{ row.health === 'good' ? '🟢 优质' : row.health === 'dead' ? '🔴 失效' : '⚪ 未测' }}
+                <el-tag size="small" :type="row.health === 'good' ? 'success' : row.health === 'slow' ? 'warning' : row.health === 'dead' ? 'danger' : 'info'">
+                  {{ row.health === 'good' ? '🟢 优质' : row.health === 'slow' ? '🟡 较慢' : row.health === 'dead' ? '🔴 失效' : '⚪ 未测' }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -471,9 +508,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
+import request from '../utils/request';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
+const axios = request;
 const router = useRouter();
 const isDark = ref(true);
 const activeTab = ref('overview');
@@ -522,6 +560,24 @@ const parsedSources = ref([]);
 const importSourceUrl = ref('');
 const importSourceContent = ref('');
 const importingSource = ref(false);
+
+// 多线程体检状态
+const healthChecking = ref(false);
+const healthCheckFinished = ref(false);
+let cancelHealthCheck = false;
+const healthCheckStats = ref({
+  current: 0,
+  total: 0,
+  good: 0,
+  slow: 0,
+  dead: 0,
+  currentSourceName: ''
+});
+
+const healthCheckProgress = computed(() => {
+  if (healthCheckStats.value.total === 0) return 0;
+  return Math.min(100, Math.floor((healthCheckStats.value.current / healthCheckStats.value.total) * 100));
+});
 
 const showRuleDialog = ref(false);
 const editingRule = ref({});
@@ -642,9 +698,21 @@ function processLocalFile(file) {
     try {
       const text = e.target.result;
       const parsed = JSON.parse(text);
-      const list = Array.isArray(parsed) ? parsed : [parsed];
+      let list = [];
+      if (Array.isArray(parsed)) {
+        list = parsed;
+      } else if (parsed && typeof parsed === 'object') {
+        if (Array.isArray(parsed.data)) {
+          list = parsed.data;
+        } else if (Array.isArray(parsed.sources)) {
+          list = parsed.sources;
+        } else if (parsed.bookSourceUrl || parsed.bookSourceName) {
+          list = [parsed];
+        }
+      }
+      list = list.filter(s => s && (s.bookSourceUrl || s.bookSourceName));
       if (list.length === 0) {
-        ElMessage.warning('该文件中没有书源内容');
+        ElMessage.warning('该文件中没有检测到有效书源内容');
         parsedSources.value = [];
         return;
       }
@@ -754,19 +822,97 @@ async function saveSourcesToBackend(list) {
   }
 }
 
+function stopHealthCheck() {
+  cancelHealthCheck = true;
+  healthChecking.value = false;
+  ElMessage.info('已中断体检');
+}
+
+async function purgeDeadSources() {
+  const deadSources = sources.value.filter(s => s.health === 'dead');
+  if (deadSources.length === 0) {
+    ElMessage.info('暂无检测出的失效书源');
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(`确定一键清理这 ${deadSources.length} 个失效书源吗？`, '批量清理', {
+      type: 'warning'
+    });
+    const keepSources = sources.value.filter(s => s.health !== 'dead');
+    await axios.post('/reader3/saveBookSources', keepSources);
+    sources.value = keepSources;
+    healthCheckStats.value.dead = 0;
+    ElMessage.success(`已清理 ${deadSources.length} 个失效书源！`);
+  } catch (e) {}
+}
+
 async function testSourcesHealth() {
-  ElMessage.info('开始一键体检前 15 个书源...');
-  for (let i = 0; i < Math.min(15, sources.value.length); i++) {
-    const s = sources.value[i];
-    try {
-      const start = Date.now();
-      await axios.get('/reader3/searchBook', { params: { key: '剑来', bookSourceUrl: s.bookSourceUrl } });
-      s.health = (Date.now() - start < 3000) ? 'good' : 'slow';
-    } catch (e) {
-      s.health = 'dead';
+  if (sources.value.length === 0) {
+    ElMessage.warning('书源列表为空，请先导入书源');
+    return;
+  }
+
+  cancelHealthCheck = false;
+  healthChecking.value = true;
+  healthCheckFinished.value = false;
+
+  const list = sources.value;
+  healthCheckStats.value = {
+    current: 0,
+    total: list.length,
+    good: 0,
+    slow: 0,
+    dead: 0,
+    currentSourceName: ''
+  };
+
+  // 8路多线程并发连接池 (用户需求 3)
+  const CONCURRENCY = 8;
+  let currentIndex = 0;
+
+  async function worker() {
+    while (currentIndex < list.length && !cancelHealthCheck) {
+      const idx = currentIndex++;
+      const s = list[idx];
+      healthCheckStats.value.currentSourceName = s.bookSourceName || s.bookSourceUrl;
+
+      const startTime = Date.now();
+      try {
+        const res = await axios.get('/reader3/searchBook', {
+          params: { key: '我的', bookSourceUrl: s.bookSourceUrl },
+          timeout: 4500
+        });
+        const elapsed = Date.now() - startTime;
+        if (res.data && res.data.isSuccess && Array.isArray(res.data.data) && res.data.data.length > 0) {
+          if (elapsed < 2000) {
+            s.health = 'good';
+            healthCheckStats.value.good++;
+          } else {
+            s.health = 'slow';
+            healthCheckStats.value.slow++;
+          }
+        } else {
+          s.health = 'dead';
+          healthCheckStats.value.dead++;
+        }
+      } catch (err) {
+        s.health = 'dead';
+        healthCheckStats.value.dead++;
+      }
+      healthCheckStats.value.current++;
     }
   }
-  ElMessage.success('体检完成！');
+
+  const workers = [];
+  for (let w = 0; w < Math.min(CONCURRENCY, list.length); w++) {
+    workers.push(worker());
+  }
+
+  await Promise.all(workers);
+  healthChecking.value = false;
+  healthCheckFinished.value = true;
+  healthCheckStats.value.currentSourceName = '检测完毕';
+  ElMessage.success(`多线程体检完成！优质 ${healthCheckStats.value.good} 个，较慢 ${healthCheckStats.value.slow} 个，失效 ${healthCheckStats.value.dead} 个`);
 }
 
 async function toggleAllSources(enable) {
@@ -1367,20 +1513,150 @@ onMounted(() => {
   margin-bottom: 18px;
 }
 
+/* 多线程体检进度卡片 */
+.health-progress-card {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+}
+
+.theme-light .health-progress-card {
+  background: #f6f8fa;
+  border-color: #d0d7de;
+}
+
+.progress-bar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.progress-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pulsing-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #10b981;
+  display: inline-block;
+}
+
+.pulsing-indicator.is-active {
+  animation: pulse-ring 1.2s infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.9); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.6; }
+  100% { transform: scale(0.9); opacity: 1; }
+}
+
+.progress-ratio {
+  color: #58a6ff;
+  font-size: 13px;
+}
+
+.detecting-name {
+  font-size: 12px;
+  color: #8b949e;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+.progress-stat-pills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.stat-pill {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+}
+
+.stat-pill.good {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.stat-pill.slow {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.25);
+}
+
+.stat-pill.dead {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.stat-pill.total {
+  background: rgba(59, 130, 246, 0.12);
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, 0.25);
+}
+
 @media (max-width: 768px) {
+  .admin-header {
+    padding: 10px 12px;
+  }
+  .brand-badge {
+    display: none;
+  }
   .admin-body {
     flex-direction: column;
   }
   .admin-sidebar {
     width: 100%;
     overflow-x: auto;
-    padding: 8px;
+    padding: 8px 12px;
+    background: #161b22;
+    border-bottom: 1px solid #30363d;
   }
   .sidebar-nav-list {
     flex-direction: row;
+    gap: 8px;
   }
   .sidebar-nav-item {
     white-space: nowrap;
+    padding: 6px 12px;
+    font-size: 13px;
+    border-radius: 20px;
+  }
+  .admin-main {
+    padding: 12px;
+  }
+  .toolbar-actions {
+    margin-top: 8px;
+    width: 100%;
+  }
+  .toolbar-actions .el-button {
+    flex: 1;
+  }
+  .progress-actions {
+    width: 100%;
+    margin-top: 6px;
   }
 }
 </style>

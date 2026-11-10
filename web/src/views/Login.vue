@@ -154,11 +154,12 @@
 
 <script setup>
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
-import axios from 'axios';
+import { useRouter, useRoute } from 'vue-router';
+import request from '../utils/request';
 import { ElMessage } from 'element-plus';
 
 const router = useRouter();
+const route = useRoute();
 
 const isLogin = ref(true);
 const remember = ref(true);
@@ -195,23 +196,33 @@ function goHome() {
 }
 
 async function handleSubmit() {
-  if (!loginForm.value.username.trim() || !loginForm.value.password.trim()) {
+  const username = loginForm.value.username.trim();
+  const password = loginForm.value.password.trim();
+  if (!username || !password) {
     triggerShake('请完整填写用户名和密码');
     return;
   }
   loading.value = true;
   errorMsg.value = '';
   try {
-    const res = await axios.post('/login', {
-      ...loginForm.value,
+    const res = await request.post('/login', {
+      username,
+      password,
       isLogin: isLogin.value
     });
     if (res && res.data && res.data.isSuccess) {
-      ElMessage.success(isLogin.value ? '登录成功' : '注册成功');
-      if (remember.value) {
-        localStorage.setItem('userToken', res.data.data?.token || 'active');
+      const data = res.data.data;
+      const token = data?.accessToken || data?.token || `${username}:${data?.token || ''}`;
+      if (token) {
+        localStorage.setItem('accessToken', token);
+        localStorage.setItem('userToken', token);
       }
-      router.push('/');
+      if (data) {
+        localStorage.setItem('userInfo', JSON.stringify(data));
+      }
+      ElMessage.success(isLogin.value ? '登录成功' : '注册成功');
+      const target = (route.query && route.query.redirect) ? String(route.query.redirect) : '/';
+      router.push(target);
     } else {
       const msg = res.data?.errorMsg || '操作失败，请重试';
       triggerShake(msg);
@@ -226,7 +237,9 @@ async function handleSubmit() {
 
 function clearLocalCache() {
   try {
+    localStorage.removeItem('accessToken');
     localStorage.removeItem('userToken');
+    localStorage.removeItem('userInfo');
     sessionStorage.clear();
     loginForm.value = { username: '', password: '', code: '' };
     ElMessage.info('已清理本地登录凭据缓存');

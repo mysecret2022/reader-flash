@@ -232,7 +232,8 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import axios from 'axios';
+import request from '../utils/request';
+const axios = request;
 import { useReaderStore } from '../stores/reader';
 import { useStatsStore } from '../stores/stats';
 import { useOfflineStore } from '../stores/offline';

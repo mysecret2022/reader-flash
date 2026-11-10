@@ -27,14 +27,17 @@
       </div>
 
       <div class="header-right">
-        <el-button class="nav-btn" circle @click="$router.push('/login')" title="用户登录 (毛玻璃)">
-          👤
-        </el-button>
+        <el-tag size="small" type="info" effect="plain" class="current-user-tag">
+          👤 {{ currentUsername }}
+        </el-tag>
         <el-button class="nav-btn" circle @click="showStatsModal = true" title="个人阅读数据与成就">
           📊
         </el-button>
         <el-button class="nav-btn" circle @click="goToAdmin" title="书源管理中心">
           ⚙️
+        </el-button>
+        <el-button class="nav-btn logout-btn" circle @click="handleLogout" title="退出登录">
+          🚪
         </el-button>
       </div>
     </header>
@@ -62,7 +65,7 @@
           @click="openSearchResult(item)"
         >
           <div class="search-card-cover">
-            <img :src="item.cover || defaultCover" :alt="item.name" loading="lazy" />
+            <img :src="item.coverUrl || item.cover || defaultCover" :alt="item.name" loading="lazy" />
           </div>
           <div class="search-card-info">
             <div class="book-name">{{ item.name }}</div>
@@ -114,7 +117,7 @@
         >
           <!-- 封面图与离线角标 -->
           <div class="cover-wrapper">
-            <img :src="book.cover || defaultCover" :alt="book.name" loading="lazy" />
+            <img :src="book.coverUrl || book.cover || defaultCover" :alt="book.name" loading="lazy" />
             <span v-if="hasOfflineCache(book.bookUrl)" class="offline-badge">
               ⚡ 已离线
             </span>
@@ -133,6 +136,30 @@
 
     <!-- 个人阅读数据与成就弹窗 -->
     <ReadingStatsModal v-model="showStatsModal" />
+
+    <!-- 移动端专属吸底导航栏 (偏向手机方向优化) -->
+    <nav class="mobile-bottom-nav">
+      <div class="nav-item active" @click="clearSearch">
+        <span class="icon">📚</span>
+        <span class="label">书架</span>
+      </div>
+      <div class="nav-item" @click="focusSearchInput">
+        <span class="icon">🔍</span>
+        <span class="label">找书</span>
+      </div>
+      <div class="nav-item" @click="showStatsModal = true">
+        <span class="icon">📊</span>
+        <span class="label">成就</span>
+      </div>
+      <div class="nav-item" @click="goToAdmin">
+        <span class="icon">⚙️</span>
+        <span class="label">控制台</span>
+      </div>
+      <div class="nav-item" @click="handleLogout">
+        <span class="icon">🚪</span>
+        <span class="label">退出</span>
+      </div>
+    </nav>
   </div>
 </template>
 
@@ -143,6 +170,7 @@ import { useBookStore } from '../stores/book';
 import { useOfflineStore } from '../stores/offline';
 import ReadingStatsModal from '../components/ReadingStatsModal.vue';
 import defaultCover from '../assets/imgs/noCover.jpeg';
+import { ElMessage, ElMessageBox } from 'element-plus';
 
 const router = useRouter();
 const bookStore = useBookStore();
@@ -150,6 +178,15 @@ const offlineStore = useOfflineStore();
 
 const searchQuery = ref('');
 const showStatsModal = ref(false);
+
+const currentUsername = computed(() => {
+  try {
+    const info = JSON.parse(localStorage.getItem('userInfo') || '{}');
+    return info.username || '读者';
+  } catch (e) {
+    return '读者';
+  }
+});
 
 function handleSearch() {
   if (!searchQuery.value.trim()) return;
@@ -160,6 +197,30 @@ function clearSearch() {
   bookStore.searchKeyword = '';
   bookStore.searchResults = [];
   searchQuery.value = '';
+}
+
+function focusSearchInput() {
+  const inputEl = document.querySelector('.search-bar input');
+  if (inputEl) {
+    inputEl.focus();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+
+async function handleLogout() {
+  try {
+    await ElMessageBox.confirm('确定退出当前登录状态吗？', '退出确认', {
+      type: 'warning',
+      confirmButtonText: '确定退出',
+      cancelButtonText: '取消'
+    });
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('userToken');
+    localStorage.removeItem('userInfo');
+    sessionStorage.clear();
+    ElMessage.success('已安全退出');
+    router.push('/login');
+  } catch (e) {}
 }
 
 function openBook(book) {
@@ -481,5 +542,89 @@ onMounted(async () => {
 .empty-text {
   font-size: 14px;
   color: #64748b;
+}
+
+/* 移动端专属吸底导航栏与手机体验优化 */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .bookshelf-page {
+    padding: 10px 10px calc(72px + env(safe-area-inset-bottom)) 10px;
+  }
+  .shelf-header {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+  .header-left .version-tag {
+    display: none;
+  }
+  .search-bar {
+    order: 3;
+    width: 100%;
+    margin: 4px 0 0 0;
+  }
+  .current-user-tag {
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .books-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px;
+  }
+  .search-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px;
+  }
+  .search-card {
+    padding: 10px;
+  }
+
+  /* 移动端底部悬浮导航 */
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(56px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    background: rgba(22, 27, 34, 0.96);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid #30363d;
+    z-index: 1000;
+    justify-content: space-around;
+    align-items: center;
+  }
+  .mobile-bottom-nav .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    height: 100%;
+    cursor: pointer;
+    color: #8b949e;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mobile-bottom-nav .nav-item:active {
+    transform: scale(0.92);
+  }
+  .mobile-bottom-nav .nav-item.active {
+    color: #34d399;
+  }
+  .mobile-bottom-nav .nav-item .icon {
+    font-size: 18px;
+    line-height: 1.2;
+  }
+  .mobile-bottom-nav .nav-item .label {
+    font-size: 11px;
+    margin-top: 2px;
+  }
 }
 </style>
