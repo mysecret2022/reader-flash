@@ -1,8 +1,10 @@
 @echo off
+cd /d "%~dp0"
 echo ==============================================
 echo Starting reader-flash in Docker...
 echo ==============================================
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 if errorlevel 1 (
     echo [ERROR] Failed to start reader-flash with docker compose.
     pause

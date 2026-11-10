@@ -68,6 +68,12 @@
   - 将原版 2019 年过期的 Chrome 75 请求头升级为 Chrome 128 真实指纹，杜绝被小说源站当成老旧爬虫 403 拦截。
   - 在 Vert.x HttpServer 中开启 `isCompressionSupported = true`，使静态资源与接口传输体积再降 60% 以上。
 
+### 3.5 Docker 镜像发布与一键编排标准化
+- **镜像仓库**：`ghcr.io/mysecret2022/reader-flash:latest` (GitHub Packages 公开镜像)
+- **改进点**：
+  - 清理多余的 `docker-compose.yaml` 避免配置命名冲突。
+  - `docker-compose.yml` 统一直连 GHCR 预编译镜像，Windows 批处理 `start-docker.bat` 与 Linux 脚本 `start-docker.sh` 均采用 `docker compose pull && docker compose up -d` 纯净拉起，并规范目录锚定 (`cd /d "%~dp0"` 与 `cd "$(dirname "$0")"`)，免去用户在本地配置复杂编译环境。
+
 ---
 
 ## 4. 构建与测试指引 (Build & Test Guide)
@@ -92,9 +98,13 @@ java -jar build/libs/reader-2.0.1.jar --reader.server.port=8090
 # 浏览器访问: http://localhost:8090
 ```
 
-### 4.4 Docker 镜像构建与容器化启动
+### 4.4 Docker 容器化启动
 ```bash
-docker compose up -d --build
+# 直接拉取并后台启动预编译容器
+docker compose pull && docker compose up -d
+# 或通过封装脚本启动
+./start-docker.sh        # Linux / macOS
+start-docker.bat         # Windows
 ```
 
 ---

@@ -31,8 +31,10 @@
 **Windows:**
 双击运行 `start-docker.bat`，或在命令行中执行：
 ```bat
-docker compose up -d --build
+docker compose pull && docker compose up -d
 ```
+
+> **提示**：脚本将自动从 GitHub Container Registry 拉取官方构建的最新极速镜像 `ghcr.io/mysecret2022/reader-flash:latest`，无需本地安装编译环境即可一键启动。
 
 - **访问地址**：`http://localhost:8090`
 - **默认管理员账号**：`admin`
