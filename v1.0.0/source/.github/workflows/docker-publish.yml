@@ -3,6 +3,7 @@ name: Build and Push Docker Image to GHCR
 on:
   push:
     branches:
+      - main
       - master
       - dev
     paths-ignore:
@@ -26,12 +27,11 @@ jobs:
         with:
           node-version: 18
 
-      - name: Build Web Frontend (Custom Fullpage Login)
+      - name: Build Web Frontend (Vite 5 + Vue 3.4)
         run: |
           cd web
-          yarn --ignore-engines
-          export NODE_OPTIONS=--openssl-legacy-provider
-          yarn sync
+          npm install
+          npm run sync
 
       - name: Set up Java 11 (Temurin)
         uses: actions/setup-java@v4
@@ -82,4 +82,3 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
-
