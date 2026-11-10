@@ -21,7 +21,11 @@
 
 ## 🛠️ 快速启动 (三步上手)
 
-### 方式一：Docker 一键部署 (开箱即用，推荐)
+### 方式一：Docker 模式部署 (原生双架构：同时支持 ARM64 与 AMD64)
+
+> 💡 **架构原生支持**：官方镜像已通过 GitHub Actions 构建为**多架构镜像（Multi-Arch OCI Image）**，同时原生包含 **`linux/amd64` (Intel/AMD PC、云服务器)** 与 **`linux/arm64` (树莓派、Apple Silicon M 系列 Mac、群晖/绿联/极空间/飞牛等各类 NAS 与 ARM 软路由)**。Docker 会根据您的系统架构**自动精准匹配下载**，无需任何额外配置！
+
+#### 1. Docker Compose 方式 (推荐)
 
 **Linux / macOS:**
 ```bash
@@ -34,9 +38,23 @@
 docker compose pull && docker compose up -d
 ```
 
-> **提示**：脚本将自动从 GitHub Container Registry 拉取官方构建的最新极速镜像 `ghcr.io/mysecret2022/reader-flash:latest`，无需本地安装编译环境即可一键启动。
+#### 2. Docker 单行命令启动 (适合 NAS、轻量云服务器或无 compose 环境)
 
-- **访问地址**：`http://localhost:8090`
+```bash
+docker run -d \
+  --name reader-flash \
+  --restart always \
+  -p 8090:8080 \
+  -v $(pwd)/storage:/storage \
+  -v $(pwd)/logs:/app/logs \
+  -e TZ=Asia/Shanghai \
+  -e SPRING_PROFILES_ACTIVE=prod \
+  -e JAVA_OPTS="-Xmx512m" \
+  -e READER_APP_SECURE=true \
+  ghcr.io/mysecret2022/reader-flash:latest
+```
+
+- **访问地址**：`http://localhost:8090` (或 `http://服务器IP:8090`)
 - **默认管理员账号**：`admin`
 - **默认管理员密码**：`admin`
 

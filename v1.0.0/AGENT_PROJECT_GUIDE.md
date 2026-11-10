@@ -68,11 +68,15 @@
   - 将原版 2019 年过期的 Chrome 75 请求头升级为 Chrome 128 真实指纹，杜绝被小说源站当成老旧爬虫 403 拦截。
   - 在 Vert.x HttpServer 中开启 `isCompressionSupported = true`，使静态资源与接口传输体积再降 60% 以上。
 
-### 3.5 Docker 镜像发布与一键编排标准化
+### 3.5 Docker 镜像发布与双架构 (ARM64 + AMD64) 原生支持
 - **镜像仓库**：`ghcr.io/mysecret2022/reader-flash:latest` (GitHub Packages 公开镜像)
+- **多架构支持**：
+  - 经 OCI Image Index 验证，官方镜像已原生包含 `linux/amd64` 与 `linux/arm64` 双架构（兼容 x86_64 PC/服务器、树莓派 4/5、Apple Silicon Mac、各类 ARM64 NAS 与嵌入式软路由）。
+  - 客户端拉取时由 Docker 引擎根据主机 CPU 自动无感拉取对应架构层。
 - **改进点**：
   - 清理多余的 `docker-compose.yaml` 避免配置命名冲突。
   - `docker-compose.yml` 统一直连 GHCR 预编译镜像，Windows 批处理 `start-docker.bat` 与 Linux 脚本 `start-docker.sh` 均采用 `docker compose pull && docker compose up -d` 纯净拉起，并规范目录锚定 (`cd /d "%~dp0"` 与 `cd "$(dirname "$0")"`)，免去用户在本地配置复杂编译环境。
+  - 补充单行 `docker run` 极简命令，方便群晖、绿联等 NAS 用户一键运行。
 
 ---
 
