@@ -404,8 +404,22 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         launch(Dispatchers.IO) {
             webClient.getAbs(url).timeout(10000).send { ar ->
                 if (ar.succeeded()) {
-                    var body = ar.result()?.bodyAsString()
-                    if (body != null) {
+                    val resp = ar.result()
+                    val statusCode = resp?.statusCode() ?: 0
+                    val body = resp?.bodyAsString() ?: ""
+                    val lower = body.lowercase()
+                    // 精准捕获防火墙/WAF 403 阻断、404 不存在或伪装 200 的报错特征
+                    if (statusCode in 400..599 ||
+                        lower.contains("403 forbidden") ||
+                        lower.contains("403 禁止访问") ||
+                        lower.contains("访问被拒绝") ||
+                        lower.contains("未通过安全检测") ||
+                        (lower.contains("404 not found") && lower.contains("the requested url was not found"))
+                    ) {
+                        context.success(returnData.setErrorMsg("远程书源响应异常或被拦截 (HTTP $statusCode)"))
+                        return@send
+                    }
+                    if (body.isNotEmpty()) {
                         context.success(returnData.setData(arrayListOf(body)))
                         return@send
                     }

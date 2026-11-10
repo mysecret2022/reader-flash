@@ -928,15 +928,12 @@ async function testSourcesHealth() {
             isSlow = elapsed >= 3000;
           }
         } catch (err) {
-          const errMsg = String(err.message || '');
-          if (errMsg.includes('404') || errMsg.includes('ENOTFOUND') || errMsg.includes('ECONNREFUSED')) {
-            isDead = true;
-          }
+          // 搜索暂未命中或规则稍有偏差，不急于一票否决，交给后置阶段继续验证
         }
       }
 
       // 阶段 2：发现分类页（Explore）兜底验证（解决文学、分类小说网等无搜索规则但网站完全正常的问题）
-      if (!isAlive && !isDead && !cancelHealthCheck) {
+      if (!isAlive && !cancelHealthCheck) {
         const firstExplore = extractFirstExploreUrl(s.exploreUrl);
         if (firstExplore) {
           try {
@@ -951,28 +948,45 @@ async function testSourcesHealth() {
               isSlow = elapsed >= 3000;
             }
           } catch (expErr) {
-            const errMsg = String(expErr.message || '');
-            if (errMsg.includes('404') || errMsg.includes('ENOTFOUND') || errMsg.includes('ECONNREFUSED')) {
-              isDead = true;
-            }
+            // 发现页未解析出结果，交给阶段 3 站点连通性最终裁定
           }
         }
       }
 
-      // 阶段 3：网站首页/源连通性兜底探测（防止规则暂时不命中，但网站完全能打开，绝不误判为失效）
-      if (!isAlive && !isDead && !cancelHealthCheck) {
+      // 阶段 3：网站首页/源连通性兜底探测（精准识别防火墙403拦截、404空站或真实连通）
+      if (!isAlive && !cancelHealthCheck) {
         try {
           const pingRes = await axios.post('/reader3/readRemoteSourceFile', {
             url: s.bookSourceUrl
           }, { timeout: 8000 });
           if (pingRes.data && pingRes.data.isSuccess) {
-            // 网站服务器完全在线并返回了正常页面内容，判定为存活良好，绝不误杀！
-            isAlive = true;
-            isSlow = true;
+            const bodyStr = Array.isArray(pingRes.data.data) ? String(pingRes.data.data[0] || '') : String(pingRes.data.data || '');
+            const bodyLower = bodyStr.toLowerCase();
+            const isBlockedOrNotFound = 
+              bodyLower.includes('403 forbidden') ||
+              bodyLower.includes('403 禁止访问') ||
+              bodyLower.includes('访问被拒绝') ||
+              bodyLower.includes('未通过安全检测') ||
+              bodyLower.includes('just a moment...') ||
+              (bodyLower.includes('404 not found') && bodyLower.includes('the requested url was not found')) ||
+              (bodyLower.includes('404') && bodyLower.includes('not found') && bodyStr.length < 800);
+
+            if (isBlockedOrNotFound) {
+              isDead = true;
+            } else {
+              // 网站服务器完全在线且无拦截/报错，判定存活良好，绝不误杀！
+              isAlive = true;
+              isSlow = true;
+            }
+          } else {
+            const errMsg = String(pingRes.data?.errorMsg || '');
+            if (errMsg.includes('403') || errMsg.includes('404') || errMsg.includes('ENOTFOUND') || errMsg.includes('ECONNREFUSED') || errMsg.includes('拦截')) {
+              isDead = true;
+            }
           }
         } catch (pingErr) {
           const errMsg = String(pingErr.message || '');
-          if (errMsg.includes('404') || errMsg.includes('ENOTFOUND') || errMsg.includes('ECONNREFUSED')) {
+          if (errMsg.includes('403') || errMsg.includes('404') || errMsg.includes('ENOTFOUND') || errMsg.includes('ECONNREFUSED')) {
             isDead = true;
           }
         }
