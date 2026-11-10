@@ -30,6 +30,9 @@
           >
             ➕ 加入书架
           </button>
+          <span v-else class="icon-btn shelf-added-tag" title="本书已在书架中">
+            ✓ 已在书架
+          </span>
           <button class="icon-btn" @click.stop="showOfflineModal = true" title="全本离线">
             ✈️ {{ isCurrentCached ? '已离线' : '离线' }}
           </button>
@@ -672,11 +675,14 @@ function prevPage() {
 }
 
 async function checkBookshelfStatus() {
-  if (!bookUrl.value) return;
+  if (!bookUrl.value && !bookName.value) return;
   try {
     const res = await axios.get('/reader3/getBookshelf');
     if (res.data && res.data.isSuccess && Array.isArray(res.data.data)) {
-      isInBookshelf.value = res.data.data.some(b => b.bookUrl === bookUrl.value);
+      isInBookshelf.value = res.data.data.some(b =>
+        (b.bookUrl && b.bookUrl === bookUrl.value) ||
+        (b.name && b.name === bookName.value && (!author.value || b.author === author.value))
+      );
     }
   } catch (e) {}
 }
@@ -687,6 +693,7 @@ async function addToBookshelf() {
       name: bookName.value,
       author: author.value || '',
       bookUrl: bookUrl.value,
+      tocUrl: route.query.tocUrl || bookUrl.value || '',
       origin: origin.value || '',
       originName: origin.value || '',
       durChapterIndex: currentIndex.value,
@@ -696,7 +703,7 @@ async function addToBookshelf() {
     const res = await axios.post('/reader3/saveBook', payload);
     if (res.data && res.data.isSuccess) {
       isInBookshelf.value = true;
-      ElMessage.success('已成功加入书架！实时同步阅读进度');
+      ElMessage.success('🎉 已成功加入书架！实时同步阅读进度');
     } else {
       ElMessage.error(res.data?.errorMsg || '加入书架失败');
     }
@@ -1097,6 +1104,16 @@ onUnmounted(() => {
   padding: 4px 10px;
   border-radius: 14px;
   font-size: 11px;
+}
+
+.shelf-added-tag {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: #10b981 !important;
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 /* 正文视口区域 */

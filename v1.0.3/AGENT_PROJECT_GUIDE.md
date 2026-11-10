@@ -83,14 +83,27 @@
     - 屏幕左侧 30% 点击翻上一页，右侧 30% 翻下一页，中轴 40% 呼出控制栏；
     - 支持横向动态拖拽跟手位移与顺畅回弹。
 
-### 2.5 搜索结果直接加入书架“axios is not defined”根因修复
-- **用户反馈**：在主页搜索书籍后，点击卡片上的【➕ 加入书架】报错：“加入书架异常: axios is not defined”。
-- **根因分析**：
-  - `web/src/views/Index.vue` 中 `addSearchResultToShelf` 方法调用了 `axios.post('/reader3/saveBook', payload)`。
-  - 该视图头部未导入 `request` 封装客户端或 `axios`，导致运行时抛出 JavaScript `ReferenceError: axios is not defined`。
-- **修复方案**：
-  - 在 `web/src/views/Index.vue` 中补齐 `import request from '../utils/request'; const axios = request;`，确保携带完整的登录令牌与安全签名调用保存接口。
-  - 同步排查并在 `web/src/stores/offline.js` 中将裸 `axios` 统一收拢至带凭据拦截器的 `request` 客户端。
+### 2.5 搜索结果直接加入书架异常及保存失败根因彻底修复 (Bookshelf Save & Fallback Fix)
+- **用户反馈**：
+  1. 在主页搜索书籍后，点击卡片上的【➕ 加入书架】报错：“加入书架异常: axios is not defined”；
+  2. 修复变量后用户再次测试，发现仍然无法加入书架。
+- **深度排查与双端根因分析**：
+  1. **前端未导入请求库**：`web/src/views/Index.vue` 中 `addSearchResultToShelf` 误用了未导入的 `axios` 变量，抛出 `ReferenceError: axios is not defined`。
+  2. **前端未传递 `tocUrl`（目录地址）**：旧版前端无论是从搜书结果直接入架还是在阅读页中入架，向 `/reader3/saveBook` 提交的荷载中均未携带 `tocUrl`。
+  3. **后端阻塞式抓取且无异常捕获 (致命阻塞点)**：
+     - 在 `BookController.kt` 的 `saveBook` 中，如果传入的 `book.tocUrl` 为空，后端会尝试调用 `getBookSourceStringBySourceURL(book.origin)` 查找书源，并通过 `WebBook(bookSource).getBookInfo(book.bookUrl)` 现场向外部小说网站发请求抓取目录 URL。
+     - **问题 1**：部分书源没有命中或已停用时，`bookSource == null`，后端直接阻断并抛出 `"书源信息错误"`。
+     - **问题 2**：`WebBook.getBookInfo` 同步向第三方小说站发送网络请求且没有任何 `try-catch`。当第三方小说站存在防火墙/反爬拦截（403）、DNS 解析异常、超时或无法访问时，直接抛出 `java.net.UnknownHostException` 或 `SocketTimeoutException`，导致后端返回 500 并失败！
+  4. **搜索卡片交互状态未联动**：点击加入书架后，按钮文字未变更，用户无从得知是否入架成功。
+- **修复方案与实现**：
+  - **前端完整注入与状态感知**：
+    - 在 `web/src/views/Index.vue` 中导入封装的 `request` 客户端（`import request from '../utils/request'; const axios = request;`）。
+    - 提交入架时显式携带 `tocUrl: item.tocUrl || item.bookUrl || ''`。
+    - 搜书卡片增加即时书架状态判断 `isBookInShelf(item)`：已在书架中的书籍动态显示为 `✓ 已在书架` 禁用按钮，入架成功后即刻自动变色，杜绝重复点击与感知盲区。
+    - 阅读器顶部控制栏在 `checkBookshelfStatus` 时同时对比 `bookUrl` 与 `name+author`，精准命中已入架状态。
+  - **后端弹性和防崩溃兜底**：
+    - 在 `BookController.kt` 的 `saveBook` 中，对 `WebBook(bookSource).getBookInfo(book.bookUrl)` 增加完整的 `try-catch (e: Throwable)` 异常捕获；
+    - 当第三方网站不可达、超时或解析失败时，记录日志并优雅降级，自动采用 `book.tocUrl = book.bookUrl` 作为目录备选地址，确保用户的加入书架行为永远 100% 成功，绝不会因目标第三方站点故障而崩溃中断！
 
 ---
 

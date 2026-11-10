@@ -1366,13 +1366,21 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 }
             }
         } else if (book.tocUrl.isNullOrEmpty()) {
-            // 补全书籍信息
-            var bookSource = getBookSourceStringBySourceURL(book.origin, userNameSpace)
-            if (bookSource == null) {
-                return returnData.setErrorMsg("书源信息错误")
+            // 补全书籍信息，捕获网络及解析异常，杜绝因外部源延迟或反爬失败导致书籍无法入架
+            try {
+                var bookSource = getBookSourceStringBySourceURL(book.origin, userNameSpace)
+                if (bookSource != null) {
+                    var newBook = WebBook(bookSource, appConfig.debugLog).getBookInfo(book.bookUrl)
+                    if (newBook != null) {
+                        book.fillData(newBook, listOf("name", "author", "coverUrl", "tocUrl", "intro", "latestChapterTitle", "wordCount"))
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("保存书籍时从源站抓取详情异常: origin={}, url={}, error={}", book.origin, book.bookUrl, e.message)
             }
-            var newBook = WebBook(bookSource, appConfig.debugLog).getBookInfo(book.bookUrl)
-            book.fillData(newBook, listOf("name", "author", "coverUrl", "tocUrl", "intro", "latestChapterTitle", "wordCount"))
+            if (book.tocUrl.isNullOrEmpty()) {
+                book.tocUrl = book.bookUrl
+            }
         }
         book = mergeBookCacheInfo(book)
 

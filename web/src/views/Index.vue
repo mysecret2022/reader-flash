@@ -79,8 +79,12 @@
               <button class="card-btn btn-preview" @click.stop="openSearchResult(item)">
                 📖 立即预览
               </button>
-              <button class="card-btn btn-shelf" @click.stop="addSearchResultToShelf(item)">
-                ➕ 加入书架
+              <button
+                class="card-btn btn-shelf"
+                :class="{ 'is-in-shelf': isBookInShelf(item) }"
+                @click.stop="addSearchResultToShelf(item)"
+              >
+                {{ isBookInShelf(item) ? '✓ 已在书架' : '➕ 加入书架' }}
               </button>
             </div>
           </div>
@@ -294,12 +298,25 @@ function openSearchResult(item) {
   });
 }
 
+function isBookInShelf(item) {
+  if (!item) return false;
+  return bookStore.bookshelf.some(b =>
+    (b.bookUrl && item.bookUrl && b.bookUrl === item.bookUrl) ||
+    (b.name && item.name && b.name === item.name && (!item.author || b.author === item.author))
+  );
+}
+
 async function addSearchResultToShelf(item) {
+  if (isBookInShelf(item)) {
+    ElMessage.info(`《${item.name}》已在书架中`);
+    return;
+  }
   try {
     const payload = {
       name: item.name,
       author: item.author || '',
       bookUrl: item.bookUrl,
+      tocUrl: item.tocUrl || item.bookUrl || '',
       origin: item.origin || '',
       originName: item.originName || item.origin || '',
       coverUrl: item.coverUrl || item.cover || '',
@@ -307,7 +324,7 @@ async function addSearchResultToShelf(item) {
     };
     const res = await axios.post('/reader3/saveBook', payload);
     if (res.data && res.data.isSuccess) {
-      ElMessage.success(`《${item.name}》已成功加入书架！`);
+      ElMessage.success(`🎉《${item.name}》已成功加入书架！`);
       await bookStore.fetchBookshelf();
     } else {
       ElMessage.error(res.data?.errorMsg || '加入书架失败');
@@ -547,6 +564,13 @@ onMounted(async () => {
 
 .btn-shelf:hover {
   background: rgba(46, 160, 67, 0.32);
+}
+
+.btn-shelf.is-in-shelf {
+  background: rgba(16, 185, 129, 0.25);
+  color: #10b981;
+  border-color: rgba(16, 185, 129, 0.6);
+  cursor: default;
 }
 
 .group-tabs {
