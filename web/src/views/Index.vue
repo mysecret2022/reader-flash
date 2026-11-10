@@ -195,6 +195,8 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import request from '../utils/request';
+const axios = request;
 import { useBookStore } from '../stores/book';
 import { useOfflineStore } from '../stores/offline';
 import ReadingStatsModal from '../components/ReadingStatsModal.vue';

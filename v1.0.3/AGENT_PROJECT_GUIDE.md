@@ -83,6 +83,15 @@
     - 屏幕左侧 30% 点击翻上一页，右侧 30% 翻下一页，中轴 40% 呼出控制栏；
     - 支持横向动态拖拽跟手位移与顺畅回弹。
 
+### 2.5 搜索结果直接加入书架“axios is not defined”根因修复
+- **用户反馈**：在主页搜索书籍后，点击卡片上的【➕ 加入书架】报错：“加入书架异常: axios is not defined”。
+- **根因分析**：
+  - `web/src/views/Index.vue` 中 `addSearchResultToShelf` 方法调用了 `axios.post('/reader3/saveBook', payload)`。
+  - 该视图头部未导入 `request` 封装客户端或 `axios`，导致运行时抛出 JavaScript `ReferenceError: axios is not defined`。
+- **修复方案**：
+  - 在 `web/src/views/Index.vue` 中补齐 `import request from '../utils/request'; const axios = request;`，确保携带完整的登录令牌与安全签名调用保存接口。
+  - 同步排查并在 `web/src/stores/offline.js` 中将裸 `axios` 统一收拢至带凭据拦截器的 `request` 客户端。
+
 ---
 
 ## 3. 架构与核心文件指引

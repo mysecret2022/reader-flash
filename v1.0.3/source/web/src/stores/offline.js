@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
-import axios from 'axios';
+import request from '../utils/request';
+const axios = request;
 import { saveChapterOffline, getChapterOffline, getCachedChapterIndices, clearBookOfflineCache } from '../utils/db';
 
 export const useOfflineStore = defineStore('offline', {
