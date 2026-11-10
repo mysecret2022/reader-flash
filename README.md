@@ -1,6 +1,6 @@
 # ⚡ reader-flash (极速现代化小说阅读系统)
 
-> **声明**：本项目基于 [https://github.com/mysecret2022/reader](https://github.com/mysecret2022/reader) 及经典开源阅读内核进行二次开发与现代化重构，维护者非官方维护者。完整遵循原项目 GPL-3.0 开源协议与版权署名。
+> 本项目是 [mysecret2022/reader](https://github.com/mysecret2022/reader) 的下一代现代化极速重构版本，专为追求极致性能、秒级冷启与沉浸式阅读体验而生。
 
 ---
 

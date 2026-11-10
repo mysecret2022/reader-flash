@@ -53,7 +53,7 @@ out
 *.pyc
 
 # Local version archives
-/v*/
+
 
 
 node_modules/
