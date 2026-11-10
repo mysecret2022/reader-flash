@@ -252,17 +252,37 @@
           </div>
 
           <el-table :data="userList" v-loading="loadingUsers" style="width: 100%;">
-            <el-table-column prop="username" label="用户名" min-width="140" />
-            <el-table-column label="角色身份" width="120">
+            <el-table-column prop="username" label="用户名" min-width="140">
               <template #default="{ row }">
-                <el-tag size="small" :type="row.role === 'admin' ? 'danger' : 'info'">
-                  {{ row.role === 'admin' ? '👑 超级管理员' : '普通用户' }}
+                <span style="font-weight: 600; color: #f1f5f9;">{{ row.username }}</span>
+                <el-tag v-if="row.username === 'admin'" size="small" type="warning" effect="plain" style="margin-left: 8px;">系统预设</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="角色身份" width="130">
+              <template #default="{ row }">
+                <el-tag size="small" :type="(row.isAdmin || row.is_admin || row.username === 'admin') ? 'danger' : 'info'">
+                  {{ (row.isAdmin || row.is_admin || row.username === 'admin') ? '👑 管理员' : '👤 普通用户' }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="状态" width="100">
+            <el-table-column label="WebDAV 备份" width="130">
               <template #default="{ row }">
-                <el-tag size="small" type="success">正常活跃</el-tag>
+                <el-switch
+                  :model-value="row.enableWebdav !== false && row.enable_webdav !== false"
+                  :disabled="row.username === 'admin'"
+                  size="small"
+                  @change="(val) => toggleUserPermission(row, 'enableWebdav', val)"
+                />
+              </template>
+            </el-table-column>
+            <el-table-column label="离线存储" width="120">
+              <template #default="{ row }">
+                <el-switch
+                  :model-value="row.enableLocalStore !== false && row.enable_local_store !== false"
+                  :disabled="row.username === 'admin'"
+                  size="small"
+                  @change="(val) => toggleUserPermission(row, 'enableLocalStore', val)"
+                />
               </template>
             </el-table-column>
             <el-table-column label="操作" width="160" fixed="right">
@@ -315,16 +335,85 @@
       </main>
     </div>
 
-    <!-- 弹窗 1：导入书源 -->
-    <el-dialog v-model="showImportDialog" title="➕ 导入新书源" width="90%" max-width="500px" append-to-body>
-      <div class="import-dialog-body">
-        <el-input v-model="importSourceUrl" placeholder="输入网络书源 URL (如 https://.../sources.json)" clearable />
-        <div style="margin-top: 15px;">
-          <el-button type="primary" class="glow-btn" style="width: 100%;" :loading="importingSource" @click="confirmImportSource">
-            🚀 确认一键导入
-          </el-button>
-        </div>
-      </div>
+    <!-- 弹窗 1：导入书源（支持本地文件、网络远程链接、直接粘贴三种模式） -->
+    <el-dialog v-model="showImportDialog" title="➕ 导入书源" width="90%" max-width="580px" append-to-body>
+      <el-tabs v-model="importTab" class="import-tabs">
+        <!-- 标签 1：本地文件导入 -->
+        <el-tab-pane label="📁 本地文件导入" name="local">
+          <div class="file-upload-dropzone" @click="triggerFileInput" @dragover.prevent @drop.prevent="handleFileDrop">
+            <input type="file" ref="fileInputRef" accept=".json,.txt" style="display: none;" @change="handleFileSelect" />
+            <div class="dropzone-content">
+              <div class="dropzone-icon">📥</div>
+              <p class="dropzone-title">{{ localFileName ? localFileName : '点击选择本地书源文件，或直接拖拽文件到这里' }}</p>
+              <p class="dropzone-sub">支持 .json 与 .txt 格式的书源定义文件</p>
+              <div v-if="parsedSources.length > 0" class="parsed-badge">
+                ✅ 已解析出 <strong>{{ parsedSources.length }}</strong> 个书源
+              </div>
+            </div>
+          </div>
+          <div style="margin-top: 16px; text-align: right;">
+            <el-button @click="showImportDialog = false">取消</el-button>
+            <el-button
+              type="primary"
+              class="glow-btn"
+              :disabled="parsedSources.length === 0"
+              :loading="importingSource"
+              @click="submitLocalSources"
+            >
+              🚀 导入这 {{ parsedSources.length }} 个书源
+            </el-button>
+          </div>
+        </el-tab-pane>
+
+        <!-- 标签 2：网络链接导入 -->
+        <el-tab-pane label="🌐 网络链接导入" name="url">
+          <div style="margin-bottom: 12px; font-size: 13px; color: #94a3b8;">
+            请输入网络书源 JSON 文件的 HTTP / HTTPS 地址：
+          </div>
+          <el-input
+            v-model="importSourceUrl"
+            type="textarea"
+            :rows="3"
+            placeholder="如: https://example.com/sources.json"
+            clearable
+          />
+          <div style="margin-top: 16px; text-align: right;">
+            <el-button @click="showImportDialog = false">取消</el-button>
+            <el-button
+              type="primary"
+              class="glow-btn"
+              :loading="importingSource"
+              @click="confirmImportSourceUrl"
+            >
+              🌐 拉取并导入
+            </el-button>
+          </div>
+        </el-tab-pane>
+
+        <!-- 标签 3：JSON 文本直接粘贴 -->
+        <el-tab-pane label="📝 文本/JSON 直接粘贴" name="text">
+          <div style="margin-bottom: 12px; font-size: 13px; color: #94a3b8;">
+            请将书源 JSON 数组或单个书源对象粘贴到下方：
+          </div>
+          <el-input
+            v-model="importSourceContent"
+            type="textarea"
+            :rows="6"
+            placeholder="[ { &quot;bookSourceName&quot;: &quot;...&quot;, &quot;bookSourceUrl&quot;: &quot;...&quot; } ]"
+          />
+          <div style="margin-top: 16px; text-align: right;">
+            <el-button @click="showImportDialog = false">取消</el-button>
+            <el-button
+              type="primary"
+              class="glow-btn"
+              :loading="importingSource"
+              @click="confirmImportSourceText"
+            >
+              📝 解析并导入
+            </el-button>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
     </el-dialog>
 
     <!-- 弹窗 2：新建/编辑替换规则 -->
@@ -353,18 +442,27 @@
     </el-dialog>
 
     <!-- 弹窗 3：添加新用户 -->
-    <el-dialog v-model="showAddUserDialog" title="➕ 添加新用户" width="90%" max-width="450px" append-to-body>
-      <el-form label-width="80px">
+    <el-dialog v-model="showAddUserDialog" title="➕ 添加新用户" width="90%" max-width="480px" append-to-body>
+      <el-form label-width="95px" class="user-add-form">
         <el-form-item label="用户名">
-          <el-input v-model="newUserData.username" placeholder="账号名称" />
+          <el-input v-model="newUserData.username" placeholder="至少 3 位字母或数字 (如 reader01)" clearable />
         </el-form-item>
         <el-form-item label="登录密码">
-          <el-input v-model="newUserData.password" type="password" placeholder="设置初始密码" />
+          <el-input v-model="newUserData.password" type="password" show-password placeholder="至少 4 位登录密码" clearable />
+        </el-form-item>
+        <el-form-item label="管理权限">
+          <el-switch v-model="newUserData.isAdmin" active-text="设置为超级管理员" />
+        </el-form-item>
+        <el-form-item label="WebDAV 备份">
+          <el-switch v-model="newUserData.enableWebdav" active-text="允许独立云备份" />
+        </el-form-item>
+        <el-form-item label="本地书籍存储">
+          <el-switch v-model="newUserData.enableLocalStore" active-text="允许本地离线存储" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showAddUserDialog = false">取消</el-button>
-        <el-button type="primary" class="glow-btn" @click="confirmAddUser">确认创建</el-button>
+        <el-button type="primary" class="glow-btn" :loading="addingUser" @click="confirmAddUser">确认创建</el-button>
       </template>
     </el-dialog>
   </div>
@@ -417,14 +515,26 @@ const loadingUsers = ref(false);
 const savingConfig = ref(false);
 
 const showImportDialog = ref(false);
+const importTab = ref('local');
+const fileInputRef = ref(null);
+const localFileName = ref('');
+const parsedSources = ref([]);
 const importSourceUrl = ref('');
+const importSourceContent = ref('');
 const importingSource = ref(false);
 
 const showRuleDialog = ref(false);
 const editingRule = ref({});
 
 const showAddUserDialog = ref(false);
-const newUserData = ref({ username: '', password: '' });
+const addingUser = ref(false);
+const newUserData = ref({
+  username: '',
+  password: '',
+  isAdmin: false,
+  enableWebdav: true,
+  enableLocalStore: true
+});
 
 // 计算属性
 const enabledSourcesCount = computed(() => sources.value.filter(s => s.enabled).length);
@@ -503,24 +613,142 @@ async function saveSource(row) {
   }
 }
 
-async function confirmImportSource() {
-  if (!importSourceUrl.value.trim()) {
+// 书源导入处理
+function triggerFileInput() {
+  if (fileInputRef.value) {
+    fileInputRef.value.value = '';
+    fileInputRef.value.click();
+  }
+}
+
+function handleFileSelect(event) {
+  const file = event.target.files?.[0];
+  if (file) {
+    processLocalFile(file);
+  }
+}
+
+function handleFileDrop(event) {
+  const file = event.dataTransfer.files?.[0];
+  if (file) {
+    processLocalFile(file);
+  }
+}
+
+function processLocalFile(file) {
+  localFileName.value = file.name;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const text = e.target.result;
+      const parsed = JSON.parse(text);
+      const list = Array.isArray(parsed) ? parsed : [parsed];
+      if (list.length === 0) {
+        ElMessage.warning('该文件中没有书源内容');
+        parsedSources.value = [];
+        return;
+      }
+      parsedSources.value = list;
+      ElMessage.success(`已成功解析文件「${file.name}」，包含 ${list.length} 个书源`);
+    } catch (err) {
+      ElMessage.error('书源文件解析失败，请确认文件格式为合法的 JSON');
+      parsedSources.value = [];
+    }
+  };
+  reader.onerror = () => {
+    ElMessage.error('读取文件失败');
+    parsedSources.value = [];
+  };
+  reader.readAsText(file);
+}
+
+async function submitLocalSources() {
+  if (parsedSources.value.length === 0) {
+    ElMessage.warning('请先选择有效的书源文件');
+    return;
+  }
+  await saveSourcesToBackend(parsedSources.value);
+}
+
+async function confirmImportSourceUrl() {
+  const url = importSourceUrl.value.trim();
+  if (!url) {
     ElMessage.warning('请输入有效的书源链接');
     return;
   }
   importingSource.value = true;
   try {
-    const res = await axios.post('/reader3/saveBookSourcesByUrl', { url: importSourceUrl.value.trim() });
-    if (res.data && res.data.isSuccess) {
-      ElMessage.success('书源导入成功');
-      showImportDialog.value = false;
-      importSourceUrl.value = '';
-      fetchSources();
-    } else {
-      ElMessage.error(res.data?.errorMsg || '导入书源失败');
+    let sourceData = null;
+    try {
+      const res = await axios.get(url, { timeout: 8000 });
+      sourceData = res.data;
+    } catch (corsErr) {
+      // 跨域或直接拉取受阻，调用后端代理拉取
+      const remoteRes = await axios.post('/reader3/readRemoteSourceFile', { url });
+      if (remoteRes.data && remoteRes.data.isSuccess && Array.isArray(remoteRes.data.data) && remoteRes.data.data.length > 0) {
+        sourceData = JSON.parse(remoteRes.data.data[0]);
+      } else {
+        throw new Error(remoteRes.data?.errorMsg || '远程书源拉取失败');
+      }
+    }
+
+    if (sourceData) {
+      const list = Array.isArray(sourceData) ? sourceData : [sourceData];
+      const ok = await saveSourcesToBackend(list);
+      if (ok) {
+        importSourceUrl.value = '';
+      }
     }
   } catch (e) {
-    ElMessage.error('网络请求异常，请检查书源链接');
+    ElMessage.error('拉取远程书源失败: ' + (e.message || e.toString()));
+  } finally {
+    importingSource.value = false;
+  }
+}
+
+async function confirmImportSourceText() {
+  const content = importSourceContent.value.trim();
+  if (!content) {
+    ElMessage.warning('请粘贴书源 JSON 数据');
+    return;
+  }
+  importingSource.value = true;
+  try {
+    const parsed = JSON.parse(content);
+    const list = Array.isArray(parsed) ? parsed : [parsed];
+    const ok = await saveSourcesToBackend(list);
+    if (ok) {
+      importSourceContent.value = '';
+    }
+  } catch (e) {
+    ElMessage.error('解析 JSON 数据失败: ' + (e.message || e.toString()));
+  } finally {
+    importingSource.value = false;
+  }
+}
+
+async function saveSourcesToBackend(list) {
+  if (!Array.isArray(list) || list.length === 0) {
+    ElMessage.warning('未检测到有效书源数据');
+    return false;
+  }
+  importingSource.value = true;
+  try {
+    const res = await axios.post('/reader3/saveBookSources', list);
+    if (res.data && res.data.isSuccess) {
+      ElMessage.success(`成功导入 ${list.length} 个书源！`);
+      showImportDialog.value = false;
+      parsedSources.value = [];
+      localFileName.value = '';
+      fetchSources();
+      return true;
+    } else {
+      ElMessage.error(res.data?.errorMsg || '保存书源失败');
+      return false;
+    }
+  } catch (e) {
+    ElMessage.error('保存书源失败: ' + (e.message || e.toString()));
+    return false;
   } finally {
     importingSource.value = false;
   }
@@ -671,40 +899,116 @@ async function fetchUsers() {
 }
 
 async function confirmAddUser() {
-  if (!newUserData.value.username || !newUserData.value.password) {
-    ElMessage.warning('请填写用户名与密码');
+  const username = (newUserData.value.username || '').trim();
+  const password = (newUserData.value.password || '').trim();
+  if (!username) {
+    ElMessage.warning('请输入用户名');
     return;
   }
+  if (!password) {
+    ElMessage.warning('请输入登录密码');
+    return;
+  }
+  if (username.length < 3) {
+    ElMessage.warning('用户名不能低于 3 位');
+    return;
+  }
+  const usernameReg = /^[a-zA-Z0-9]+$/;
+  if (!usernameReg.test(username)) {
+    ElMessage.warning('用户名只能由英文字母和数字组成');
+    return;
+  }
+  if (password.length < 4) {
+    ElMessage.warning('密码不能低于 4 位');
+    return;
+  }
+
+  addingUser.value = true;
   try {
-    await axios.post('/reader3/saveUser', newUserData.value);
-    ElMessage.success('用户创建成功');
-    showAddUserDialog.value = false;
-    newUserData.value = { username: '', password: '' };
-    fetchUsers();
+    const payload = {
+      username: username,
+      password: password,
+      isAdmin: Boolean(newUserData.value.isAdmin),
+      enableWebdav: newUserData.value.enableWebdav !== false,
+      enableLocalStore: newUserData.value.enableLocalStore !== false
+    };
+    const res = await axios.post('/reader3/addUser', payload);
+    if (res.data && res.data.isSuccess) {
+      ElMessage.success(`用户【${username}】创建成功！`);
+      showAddUserDialog.value = false;
+      newUserData.value = {
+        username: '',
+        password: '',
+        isAdmin: false,
+        enableWebdav: true,
+        enableLocalStore: true
+      };
+      fetchUsers();
+    } else {
+      ElMessage.error(res.data?.errorMsg || '创建用户失败');
+    }
   } catch (e) {
-    ElMessage.error('创建用户失败');
+    ElMessage.error(e.response?.data?.errorMsg || '网络请求异常，创建用户失败');
+  } finally {
+    addingUser.value = false;
   }
 }
 
 async function resetUserPassword(row) {
   try {
-    const { value } = await ElMessageBox.prompt(`请输入【${row.username}】的新密码:`, '重置密码', {
-      inputType: 'password'
+    const { value } = await ElMessageBox.prompt(`请输入用户【${row.username}】的新密码 (至少4位):`, '重置用户密码', {
+      inputType: 'password',
+      inputValidator: (val) => {
+        if (!val || val.length < 4) return '密码不能低于 4 位';
+        return true;
+      }
     });
     if (value) {
-      await axios.post('/reader3/saveUser', { username: row.username, password: value });
-      ElMessage.success('密码重置成功');
+      const res = await axios.post('/reader3/resetPassword', { username: row.username, password: value });
+      if (res.data && res.data.isSuccess) {
+        ElMessage.success(`已成功重置【${row.username}】的密码`);
+      } else {
+        ElMessage.error(res.data?.errorMsg || '重置密码失败');
+      }
     }
   } catch (e) {}
 }
 
 async function deleteUser(row) {
   try {
-    await ElMessageBox.confirm(`确定删除用户【${row.username}】吗？`, '提示', { type: 'warning' });
-    await axios.post('/reader3/deleteUser', { username: row.username });
-    fetchUsers();
-    ElMessage.success('删除成功');
+    await ElMessageBox.confirm(`确定删除用户【${row.username}】吗？删除后该用户数据与书架将一并清理。`, '删除确认', {
+      type: 'warning',
+      confirmButtonText: '确定删除',
+      cancelButtonText: '取消'
+    });
+    const res = await axios.post('/reader3/deleteUsers', [row.username]);
+    if (res.data && res.data.isSuccess) {
+      ElMessage.success(`已删除用户【${row.username}】`);
+      fetchUsers();
+    } else {
+      ElMessage.error(res.data?.errorMsg || '删除用户失败');
+    }
   } catch (e) {}
+}
+
+async function toggleUserPermission(row, field, val) {
+  try {
+    const payload = {
+      username: row.username,
+      [field]: val
+    };
+    const res = await axios.post('/reader3/updateUser', payload);
+    if (res.data && res.data.isSuccess) {
+      ElMessage.success('用户权限已更新');
+      row[field] = val;
+    } else {
+      ElMessage.error(res.data?.errorMsg || '更新权限失败');
+      fetchUsers();
+    }
+  } catch (e) {
+    ElMessage.error('网络请求异常');
+    fetchUsers();
+  }
 }
 
 // 6. WebDAV
@@ -1012,6 +1316,55 @@ onMounted(() => {
 
 .theme-light .form-tip {
   color: #6e7781;
+}
+
+/* 导入书源模态框 */
+.file-upload-dropzone {
+  border: 2px dashed #30363d;
+  border-radius: 8px;
+  padding: 36px 20px;
+  text-align: center;
+  background: #0d1117;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.file-upload-dropzone:hover {
+  border-color: #3b82f6;
+  background: #161b22;
+}
+
+.dropzone-icon {
+  font-size: 42px;
+  margin-bottom: 12px;
+}
+
+.dropzone-title {
+  font-size: 14px;
+  color: #e2e8f0;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+
+.dropzone-sub {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+.parsed-badge {
+  margin-top: 14px;
+  display: inline-block;
+  padding: 6px 14px;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  border-radius: 6px;
+  color: #4ade80;
+  font-size: 13px;
+}
+
+.user-add-form .el-form-item {
+  margin-bottom: 18px;
 }
 
 @media (max-width: 768px) {
