@@ -87,7 +87,8 @@ export CUSTOM_SEARCH_LOCATIONS=file:${BASE_DIR}/conf/
 # JVM Configuration
 #===========================================================================================
 if [[ "${MODE}" == "" ]]; then
-    echo "Reader 的运行模式以配置文件 conf/application.properties 为准。注意，当前未限制jvm内存"
+    JAVA_OPT="${JAVA_OPT} -Xms128m -Xmx512m -XX:+UseG1GC"
+    echo "Reader 的运行模式以配置文件 conf/application.properties 为准。默认内存限制为 512m"
 elif [[ "${MODE}" == "single" ]]; then
     JAVA_OPT="${JAVA_OPT} -Xms256m -Xmx256m -Xmn128m"
     JAVA_OPT="${JAVA_OPT} -Dreader.app.secure=false"

@@ -49,6 +49,15 @@
   - **阶段 3（首页连通性探测）**：若规则暂未命中但网站完全可连通，调用 `/reader3/readRemoteSourceFile` 进行存活探针；
   - **严格判定失效**：仅在 DNS 解析失败（`ENOTFOUND`）、连接拒绝（`ECONNREFUSED`）或硬性 404 时才标记为失效，彻底杜绝误杀可用书源。
 
+### 2.3 严控内存占用与双层资源熔断机制 (JVM & Container Memory Governance)
+- **优化背景**：现代 JVM 默认按宿主机物理内存的 25% 动态分配堆内存。在 16G/32G 宿主机或软路由、NAS 上，容易因无上限膨胀导致占用过高。
+- **解决方案与双层防护**：
+  1. **JVM 运行时软上限**：
+     - 在 `entrypoint.sh`、`docker-compose.yml`、`startup.sh`、`startup.cmd` 中全局注入默认内存限制：初始堆 `-Xms128m`，最大堆 `-Xmx512m`；
+     - 启用现代化垃圾回收器 `-XX:+UseG1GC` 与容器感知 `-XX:+UseContainerSupport`，短时并发激增后及时高效释放内存，平稳回落至低内存区间。
+  2. **Docker 容器硬件级硬熔断**：
+     - 在 `docker-compose.yml` 中配置 `deploy.resources.limits.memory: 768M`，将包括 JVM 堆外内存与 Edge TTS 微服务在内的整个容器总内存封顶在 768MB，彻底防止极端情况下挤占宿主机资源。
+
 ---
 
 ## 3. 架构与核心文件指引

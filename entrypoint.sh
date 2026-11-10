@@ -24,5 +24,12 @@ if [ -f /app/bin/tts_server.py ]; then
     python3 /app/bin/tts_server.py &
 fi
 
+# 默认内存限制与 JVM 优化参数 (防止无限制占用宿主机内存，默认最大堆512MB)
+if [ -z "$JAVA_OPTS" ]; then
+    JAVA_OPTS="-Xms128m -Xmx512m -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+fi
+
+echo "Starting reader-flash with JAVA_OPTS: ${JAVA_OPTS}"
+
 # 启动阅读主服务
-exec java -jar /app/bin/reader.jar "$@"
+exec java ${JAVA_OPTS} -jar /app/bin/reader.jar "$@"

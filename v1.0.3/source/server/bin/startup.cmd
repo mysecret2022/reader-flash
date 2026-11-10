@@ -82,7 +82,8 @@ for %%a in (%*) do (
 
 rem if reader startup mode is single
 if %MODE% == "" (
-    echo The running mode of the Reader is determined by the configuration file conf/application.properties. Please note that there is currently no memory limit set for the JVM.
+    set "READER_JVM_OPTS=-Xms128m -Xmx512m"
+    echo The running mode of the Reader is determined by the configuration file conf/application.properties. Memory limit is set to 512m.
 )
 
 if %MODE% == "single" (

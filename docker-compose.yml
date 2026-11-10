@@ -11,8 +11,12 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
-      - JAVA_OPTS=-Xmx512m
+      - JAVA_OPTS=-Xms128m -Xmx512m -XX:+UseG1GC # 默认限制堆内存最大512MB，高效GC，杜绝内存膨胀
       - READER_APP_SECURE=true # 默认多用户鉴权模式（默认管理员：admin，默认密码：admin）
       # 可在首次登录后台后直接修改密码及配置邀请码，也可通过下方环境变量直接初始化：
       # - READER_APP_SECUREKEY=admin # 初始管理员密码
       # - READER_APP_INVITECODE=      # 注册邀请码（留空则开放注册）
+    deploy:
+      resources:
+        limits:
+          memory: 768M # 容器硬件总内存上限（含 JVM 堆外与 TTS 进程），防止宿主机爆内存
