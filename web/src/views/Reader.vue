@@ -8,12 +8,22 @@
     tabindex="0"
     ref="readerContainer"
   >
-    <!-- 顶部状态栏信息 (书名、章节名、离线标记) -->
+    <!-- 顶部状态栏信息 (书名、章节名、离线标记、加入书架) -->
     <header class="reader-top-bar" :class="{ 'bar-visible': showControls }">
       <div class="top-bar-content matte-control-panel">
-        <button class="icon-btn" @click.stop="goBack">‹ 返回书架</button>
-        <span class="top-title">{{ bookName }} - {{ currentChapter?.title || '加载中...' }}</span>
+        <button class="icon-btn" @click.stop="goBack">‹ 返回</button>
+        <span class="top-title" :title="bookName + ' - ' + (currentChapter?.title || '')">
+          {{ bookName }} - {{ currentChapter?.title || (catalogLoading ? '正在解析目录...' : '目录加载完成') }}
+        </span>
         <div class="top-actions">
+          <button
+            v-if="!isInBookshelf"
+            class="icon-btn shelf-add-pill"
+            @click.stop="addToBookshelf"
+            title="将本书保存到书架"
+          >
+            ➕ 加入书架
+          </button>
           <button class="icon-btn" @click.stop="showOfflineModal = true" title="全本离线">
             ✈️ {{ isCurrentCached ? '已离线' : '离线' }}
           </button>
@@ -30,12 +40,33 @@
       @mouseup="handleSelectionChange"
       @touchend="handleSelectionChange"
     >
-      <div v-if="loading" class="reader-loading">
+      <!-- 状态 1：正在从目标源抓取解析小说目录 -->
+      <div v-if="catalogLoading" class="reader-state-card reader-loading">
         <div class="spinner"></div>
-        <span>正在极速解析章节...</span>
+        <div class="state-title">正在抓取《{{ bookName }}》...</div>
+        <div class="state-sub">正在与目标网站建立连接并解析小说目录，请稍候</div>
+        <div v-if="origin" class="state-origin">书源目标源：{{ origin }}</div>
       </div>
 
-      <!-- 模式 1：平滑上下滚动模式 -->
+      <!-- 状态 2：抓取失败，提示友好错误信息并提供重试与返回，杜绝白屏 -->
+      <div v-else-if="catalogError && chapterList.length === 0" class="reader-state-card reader-error-state">
+        <div class="error-emoji">⚠️</div>
+        <div class="state-title">无法从目标源解析此书籍</div>
+        <div class="state-desc">{{ catalogError }}</div>
+        <div class="state-btns">
+          <el-button type="primary" :loading="catalogLoading" @click="loadChapterCatalog">🔄 重新抓取</el-button>
+          <el-button @click="goBack">‹ 返回书架 / 更换书源</el-button>
+        </div>
+      </div>
+
+      <!-- 状态 3：目录已有，但正在拉取本章正文 -->
+      <div v-else-if="loading" class="reader-state-card reader-loading">
+        <div class="spinner"></div>
+        <div class="state-title">正在抓取第 {{ currentIndex + 1 }} 章正文...</div>
+        <div class="state-sub">{{ currentChapter?.title || '' }}</div>
+      </div>
+
+      <!-- 状态 4：模式 1 - 平滑上下滚动模式 -->
       <div v-else-if="readerStore.pageMode === 'scroll'" class="scroll-mode-container" ref="scrollContainer">
         <h2 class="chapter-heading">{{ currentChapter?.title }}</h2>
         <div class="chapter-body">
@@ -53,7 +84,7 @@
         </div>
       </div>
 
-      <!-- 模式 2：3D 纸张仿真翻页 / 左右翻页模式 -->
+      <!-- 状态 5：模式 2 - 3D 纸张仿真翻页 / 左右翻页模式 -->
       <div v-else class="simulation-flip-container" @click="handlePageFlipClick">
         <div class="simulation-page-sheet" :class="[`reader-theme-${readerStore.theme}`]">
           <div class="page-header">{{ currentChapter?.title }}</div>
@@ -254,11 +285,17 @@ const offlineStore = useOfflineStore();
 const bookUrl = ref(route.query.bookUrl || '');
 const bookName = ref(route.query.name || '小说阅读');
 const origin = ref(route.query.origin || '');
+const author = ref(route.query.author || '');
+const isInBookshelf = ref(false);
 
 const chapterList = ref([]);
 const currentIndex = ref(0);
 const chapterContent = ref('');
 const loading = ref(false);
+const catalogLoading = ref(false);
+const catalogError = ref('');
+const contentError = ref('');
+
 const showControls = ref(false);
 const showCatalogDrawer = ref(false);
 const showQuoteModal = ref(false);
@@ -322,25 +359,78 @@ const readerStyle = computed(() => {
   };
 });
 
-async function loadChapterCatalog() {
+async function checkBookshelfStatus() {
   if (!bookUrl.value) return;
   try {
-    const res = await axios.post('/reader3/getChapterList', { url: bookUrl.value });
+    const res = await axios.get('/reader3/getBookshelf');
     if (res.data && res.data.isSuccess && Array.isArray(res.data.data)) {
-      chapterList.value = res.data.data;
-      if (chapterList.value.length > 0) {
-        await loadChapterContent(currentIndex.value);
-      }
+      isInBookshelf.value = res.data.data.some(b => b.bookUrl === bookUrl.value);
+    }
+  } catch (e) {}
+}
+
+async function addToBookshelf() {
+  try {
+    const payload = {
+      name: bookName.value,
+      author: author.value || '',
+      bookUrl: bookUrl.value,
+      origin: origin.value || '',
+      originName: origin.value || '',
+      coverUrl: route.query.coverUrl || '',
+      durChapterIndex: currentIndex.value,
+      durChapterTitle: currentChapter.value?.title || '',
+      latestChapterTitle: chapterList.value[chapterList.value.length - 1]?.title || ''
+    };
+    const res = await axios.post('/reader3/saveBook', payload);
+    if (res.data && res.data.isSuccess) {
+      isInBookshelf.value = true;
+      ElMessage.success(`《${bookName.value}》已成功加入书架！`);
+    } else {
+      ElMessage.error(res.data?.errorMsg || '加入书架失败');
     }
   } catch (e) {
-    console.error('加载目录失败:', e);
-    ElMessage.error('加载目录失败');
+    ElMessage.error('加入书架异常: ' + (e.message || ''));
+  }
+}
+
+async function loadChapterCatalog() {
+  if (!bookUrl.value) {
+    catalogError.value = '未指定有效的小说链接';
+    return;
+  }
+  catalogLoading.value = true;
+  catalogError.value = '';
+  loading.value = true;
+  try {
+    const payload = {
+      url: bookUrl.value,
+      bookSourceUrl: origin.value || ''
+    };
+    const res = await axios.post('/reader3/getChapterList', payload, { timeout: 25000 });
+    if (res.data && res.data.isSuccess && Array.isArray(res.data.data) && res.data.data.length > 0) {
+      chapterList.value = res.data.data;
+      catalogError.value = '';
+      await loadChapterContent(currentIndex.value);
+    } else {
+      const errMsg = res.data?.errorMsg || '未能从目标源解析出章节目录，可能是书源已失效或目标网站防爬拦截';
+      catalogError.value = errMsg;
+      ElMessage.error(errMsg);
+    }
+  } catch (e) {
+    const errMsg = e.response?.data?.errorMsg || e.message || '网络连接超时';
+    catalogError.value = '抓取目标网站小说目录失败: ' + errMsg;
+    ElMessage.error(catalogError.value);
+  } finally {
+    catalogLoading.value = false;
+    loading.value = false;
   }
 }
 
 async function loadChapterContent(index) {
   if (!chapterList.value[index]) return;
   loading.value = true;
+  contentError.value = '';
   currentIndex.value = index;
   statsStore.recordActivity();
 
@@ -352,20 +442,26 @@ async function loadChapterContent(index) {
     return;
   }
 
-  // 2. 本地无缓存时向后端请求
+  // 2. 本地无缓存时向后端请求实时抓取正文
   try {
-    const res = await axios.post('/reader3/getBookContent', {
+    const payload = {
       url: bookUrl.value,
-      index: index
-    });
+      index: index,
+      bookSourceUrl: origin.value || ''
+    };
+    const res = await axios.post('/reader3/getBookContent', payload, { timeout: 25000 });
     if (res.data && res.data.isSuccess) {
       chapterContent.value = res.data.data || '';
+      contentError.value = '';
     } else {
-      chapterContent.value = '本章内容加载失败，请尝试换源或重新加载';
+      const errMsg = res.data?.errorMsg || '章节正文获取失败';
+      contentError.value = errMsg;
+      chapterContent.value = `⚠️ 获取本章正文失败：${errMsg}\n\n建议点击右上角重新加载，或返回搜索列表换源阅读。`;
     }
   } catch (e) {
-    console.error('加载正文失败:', e);
-    chapterContent.value = '网络请求失败，若已离线可离线阅读';
+    const errMsg = e.response?.data?.errorMsg || e.message || '网络连接超时';
+    contentError.value = errMsg;
+    chapterContent.value = `⚠️ 抓取目标网站本章正文失败：${errMsg}\n\n建议稍后重试或尝试更换其他书源。`;
   } finally {
     loading.value = false;
   }
@@ -506,11 +602,16 @@ function handleKeyDown(e) {
 }
 
 function goBack() {
-  router.push('/');
+  if (window.history.length > 1) {
+    router.back();
+  } else {
+    router.push('/');
+  }
 }
 
 onMounted(async () => {
   readerStore.initReaderEnvironment();
+  await checkBookshelfStatus();
   await loadChapterCatalog();
   await offlineStore.refreshCachedIndices(bookUrl.value);
 
@@ -579,7 +680,27 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 60%;
+  max-width: 55%;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shelf-add-pill {
+  background: rgba(16, 185, 129, 0.2) !important;
+  color: #10b981 !important;
+  padding: 4px 10px !important;
+  border-radius: 9999px !important;
+  font-weight: 600 !important;
+  border: 1px solid rgba(16, 185, 129, 0.4) !important;
+  transition: all 0.2s;
+}
+
+.shelf-add-pill:hover {
+  background: rgba(16, 185, 129, 0.35) !important;
 }
 
 .bottom-bar-content {
@@ -682,6 +803,60 @@ onUnmounted(() => {
   margin: 0 auto;
 }
 
+.reader-state-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.state-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+.state-sub {
+  font-size: 14px;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.state-origin {
+  font-size: 12px;
+  color: #94a3b8;
+  word-break: break-all;
+  max-width: 480px;
+}
+
+.reader-error-state {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 12px;
+  margin-top: 40px;
+}
+
+.error-emoji {
+  font-size: 40px;
+}
+
+.state-desc {
+  font-size: 14px;
+  color: #ef4444;
+  margin-bottom: 20px;
+  max-width: 500px;
+  line-height: 1.5;
+}
+
+.state-btns {
+  display: flex;
+  gap: 12px;
+}
+
 .chapter-heading {
   font-size: 1.4em;
   font-weight: 700;
@@ -726,8 +901,8 @@ onUnmounted(() => {
 }
 
 .spinner {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border: 3px solid rgba(16, 185, 129, 0.2);
   border-top-color: #10b981;
   border-radius: 50%;

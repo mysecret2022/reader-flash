@@ -402,13 +402,15 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         }
 
         launch(Dispatchers.IO) {
-            webClient.getAbs(url).timeout(3000).send {
-                var body = it.result()?.bodyAsString()
-                if (body != null) {
-                    context.success(returnData.setData(arrayListOf(body)))
-                } else {
-                    context.success(returnData.setErrorMsg("远程书源链接错误"))
+            webClient.getAbs(url).timeout(10000).send { ar ->
+                if (ar.succeeded()) {
+                    var body = ar.result()?.bodyAsString()
+                    if (body != null) {
+                        context.success(returnData.setData(arrayListOf(body)))
+                        return@send
+                    }
                 }
+                context.success(returnData.setErrorMsg("远程书源链接错误: ${ar.cause()?.message ?: "无响应"}"))
             }
         }
     }

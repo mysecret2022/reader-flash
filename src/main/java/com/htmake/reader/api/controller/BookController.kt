@@ -208,7 +208,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
 
         launch(Dispatchers.IO) {
-            webClient.getAbs(coverUrl).timeout(3000).send {
+            webClient.getAbs(coverUrl).timeout(10000).send {
                 var bodyBytes = it.result()?.bodyAsBuffer()?.getBytes()
                 if (bodyBytes != null) {
                     var res = context.response().putHeader("Cache-Control", "86400")
@@ -2050,7 +2050,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         var userBookSourceList = bookSourceList ?: loadBookSourceStringList(userNameSpace)
         for (i in 0 until userBookSourceList.size) {
             val sourceMap = userBookSourceList.get(i).toMap()
-            if (sourceUrl.equals(sourceMap.get("bookSourceUrl") as String)) {
+            val bUrl = (sourceMap.get("bookSourceUrl") as? String) ?: ""
+            if (sourceUrl.equals(bUrl) || sourceUrl.trimEnd('/') == bUrl.trimEnd('/')) {
                 bookSourceString = userBookSourceList.get(i)
                 index = i
                 break;

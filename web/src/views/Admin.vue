@@ -140,8 +140,15 @@
               style="max-width: 260px;"
             />
             <div class="toolbar-actions">
+              <el-input
+                v-model="healthCheckKeyword"
+                size="small"
+                placeholder="测试词(默认: 的)"
+                style="width: 120px;"
+                title="体检检索测试词，默认使用高频词「的」"
+              />
               <el-button size="small" type="success" :loading="healthChecking" plain @click="testSourcesHealth">
-                🩺 多线程并发体检
+                🩺 多线程深度体检
               </el-button>
               <el-button size="small" type="warning" plain @click="toggleAllSources(true)">
                 ✅ 全部启用
@@ -564,6 +571,7 @@ const importingSource = ref(false);
 // 多线程体检状态
 const healthChecking = ref(false);
 const healthCheckFinished = ref(false);
+const healthCheckKeyword = ref('的');
 let cancelHealthCheck = false;
 const healthCheckStats = ref({
   current: 0,
@@ -846,6 +854,31 @@ async function purgeDeadSources() {
   } catch (e) {}
 }
 
+// 提取书源首个发现分类页面 URL
+function extractFirstExploreUrl(exploreUrl) {
+  if (!exploreUrl) return null;
+  try {
+    const data = JSON.parse(exploreUrl);
+    if (Array.isArray(data) && data.length > 0 && data[0].url) {
+      return data[0].url;
+    }
+  } catch (e) {}
+  const lines = String(exploreUrl).replace(/\r\n/g, '\n').split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    if (line.includes('::')) {
+      const parts = line.split('::');
+      if (parts.length > 1 && parts[1].trim()) {
+        return parts[1].trim();
+      }
+    } else if (line.startsWith('http') || line.startsWith('/')) {
+      return line;
+    }
+  }
+  return null;
+}
+
 async function testSourcesHealth() {
   if (sources.value.length === 0) {
     ElMessage.warning('书源列表为空，请先导入书源');
@@ -877,28 +910,93 @@ async function testSourcesHealth() {
       healthCheckStats.value.currentSourceName = s.bookSourceName || s.bookSourceUrl;
 
       const startTime = Date.now();
-      try {
-        const res = await axios.get('/reader3/searchBook', {
-          params: { key: '我的', bookSourceUrl: s.bookSourceUrl },
-          timeout: 4500
-        });
-        const elapsed = Date.now() - startTime;
-        if (res.data && res.data.isSuccess && Array.isArray(res.data.data) && res.data.data.length > 0) {
-          if (elapsed < 2000) {
-            s.health = 'good';
-            healthCheckStats.value.good++;
-          } else {
-            s.health = 'slow';
-            healthCheckStats.value.slow++;
+      let isAlive = false;
+      let isSlow = false;
+      let isDead = false;
+
+      // 阶段 1：搜索规则实测（如果书源配置了 searchUrl）
+      const hasSearch = Boolean(s.searchUrl && String(s.searchUrl).trim());
+      if (hasSearch) {
+        try {
+          const res = await axios.post('/reader3/searchBook', {
+            key: healthCheckKeyword.value.trim() || '的',
+            bookSourceUrl: s.bookSourceUrl
+          }, { timeout: 10000 });
+          const elapsed = Date.now() - startTime;
+          if (res.data && res.data.isSuccess && Array.isArray(res.data.data) && res.data.data.length > 0) {
+            isAlive = true;
+            isSlow = elapsed >= 3000;
           }
-        } else {
-          s.health = 'dead';
-          healthCheckStats.value.dead++;
+        } catch (err) {
+          const errMsg = String(err.message || '');
+          if (errMsg.includes('404') || errMsg.includes('ENOTFOUND') || errMsg.includes('ECONNREFUSED')) {
+            isDead = true;
+          }
         }
-      } catch (err) {
+      }
+
+      // 阶段 2：发现分类页（Explore）兜底验证（解决文学、分类小说网等无搜索规则但网站完全正常的问题）
+      if (!isAlive && !isDead && !cancelHealthCheck) {
+        const firstExplore = extractFirstExploreUrl(s.exploreUrl);
+        if (firstExplore) {
+          try {
+            const expRes = await axios.post('/reader3/exploreBook', {
+              ruleFindUrl: firstExplore,
+              bookSourceUrl: s.bookSourceUrl,
+              page: 1
+            }, { timeout: 10000 });
+            const elapsed = Date.now() - startTime;
+            if (expRes.data && expRes.data.isSuccess && Array.isArray(expRes.data.data) && expRes.data.data.length > 0) {
+              isAlive = true;
+              isSlow = elapsed >= 3000;
+            }
+          } catch (expErr) {
+            const errMsg = String(expErr.message || '');
+            if (errMsg.includes('404') || errMsg.includes('ENOTFOUND') || errMsg.includes('ECONNREFUSED')) {
+              isDead = true;
+            }
+          }
+        }
+      }
+
+      // 阶段 3：网站首页/源连通性兜底探测（防止规则暂时不命中，但网站完全能打开，绝不误判为失效）
+      if (!isAlive && !isDead && !cancelHealthCheck) {
+        try {
+          const pingRes = await axios.post('/reader3/readRemoteSourceFile', {
+            url: s.bookSourceUrl
+          }, { timeout: 8000 });
+          if (pingRes.data && pingRes.data.isSuccess) {
+            // 网站服务器完全在线并返回了正常页面内容，判定为存活良好，绝不误杀！
+            isAlive = true;
+            isSlow = true;
+          }
+        } catch (pingErr) {
+          const errMsg = String(pingErr.message || '');
+          if (errMsg.includes('404') || errMsg.includes('ENOTFOUND') || errMsg.includes('ECONNREFUSED')) {
+            isDead = true;
+          }
+        }
+      }
+
+      // 最终综合状态判断
+      if (isAlive) {
+        if (!isSlow) {
+          s.health = 'good';
+          healthCheckStats.value.good++;
+        } else {
+          s.health = 'slow';
+          healthCheckStats.value.slow++;
+        }
+      } else if (isDead) {
+        // 确认域名失效、连接被拒或404才标记失效
         s.health = 'dead';
         healthCheckStats.value.dead++;
+      } else {
+        // 虽未搜到指定关键字书籍，但网站并未宕机，标记为较慢/待复核，杜绝误杀！
+        s.health = 'slow';
+        healthCheckStats.value.slow++;
       }
+
       healthCheckStats.value.current++;
     }
   }
@@ -912,7 +1010,7 @@ async function testSourcesHealth() {
   healthChecking.value = false;
   healthCheckFinished.value = true;
   healthCheckStats.value.currentSourceName = '检测完毕';
-  ElMessage.success(`多线程体检完成！优质 ${healthCheckStats.value.good} 个，较慢 ${healthCheckStats.value.slow} 个，失效 ${healthCheckStats.value.dead} 个`);
+  ElMessage.success(`多线程体检完成！优质 ${healthCheckStats.value.good} 个，较慢/可用 ${healthCheckStats.value.slow} 个，失效 ${healthCheckStats.value.dead} 个`);
 }
 
 async function toggleAllSources(enable) {

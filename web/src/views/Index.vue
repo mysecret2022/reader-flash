@@ -72,8 +72,16 @@
             <div class="book-author">✍️ {{ item.author || '未知作者' }}</div>
             <div class="book-latest">最新: {{ item.latestChapterTitle || '暂无章节' }}</div>
             <div class="book-source-tag">
-              <span class="origin-tag">{{ item.originName || '优质源' }}</span>
+              <span class="origin-tag">{{ item.originName || item.origin || '优质源' }}</span>
               <span v-if="item.time" class="rt-tag">⚡ {{ item.time }}ms</span>
+            </div>
+            <div class="search-card-actions" @click.stop>
+              <button class="card-btn btn-preview" @click.stop="openSearchResult(item)">
+                📖 立即预览
+              </button>
+              <button class="card-btn btn-shelf" @click.stop="addSearchResultToShelf(item)">
+                ➕ 加入书架
+              </button>
             </div>
           </div>
         </div>
@@ -233,8 +241,38 @@ function openBook(book) {
 function openSearchResult(item) {
   router.push({
     path: '/reader',
-    query: { bookUrl: item.bookUrl, name: item.name, origin: item.origin }
+    query: {
+      bookUrl: item.bookUrl,
+      name: item.name,
+      origin: item.origin || '',
+      author: item.author || '',
+      coverUrl: item.coverUrl || item.cover || '',
+      search: '1'
+    }
   });
+}
+
+async function addSearchResultToShelf(item) {
+  try {
+    const payload = {
+      name: item.name,
+      author: item.author || '',
+      bookUrl: item.bookUrl,
+      origin: item.origin || '',
+      originName: item.originName || item.origin || '',
+      coverUrl: item.coverUrl || item.cover || '',
+      latestChapterTitle: item.latestChapterTitle || ''
+    };
+    const res = await axios.post('/reader3/saveBook', payload);
+    if (res.data && res.data.isSuccess) {
+      ElMessage.success(`《${item.name}》已成功加入书架！`);
+      await bookStore.fetchBookshelf();
+    } else {
+      ElMessage.error(res.data?.errorMsg || '加入书架失败');
+    }
+  } catch (e) {
+    ElMessage.error('加入书架异常: ' + (e.message || ''));
+  }
 }
 
 function goToAdmin() {
@@ -428,6 +466,45 @@ onMounted(async () => {
   color: #38bdf8;
   padding: 1px 6px;
   border-radius: 4px;
+}
+
+.search-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.card-btn {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-preview {
+  background: rgba(88, 166, 255, 0.18);
+  color: #58a6ff;
+  border: 1px solid rgba(88, 166, 255, 0.35);
+}
+
+.btn-preview:hover {
+  background: rgba(88, 166, 255, 0.32);
+}
+
+.btn-shelf {
+  background: rgba(46, 160, 67, 0.18);
+  color: #3fb950;
+  border: 1px solid rgba(46, 160, 67, 0.35);
+}
+
+.btn-shelf:hover {
+  background: rgba(46, 160, 67, 0.32);
 }
 
 .group-tabs {

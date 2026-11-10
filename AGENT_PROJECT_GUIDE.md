@@ -1,75 +1,59 @@
-# AGENT_PROJECT_GUIDE (v2.0 正式版)
+# reader-flash v1.0.3 智能体自说明与维护指南 (Agent Project Guide)
 
-面向后续接手智能体的项目自说明与迭代指引文档。
-
----
-
-## 1. 版本概述 (Version Summary)
-- **版本号**：`v2.0 正式版` (v2.0 / v2.0.8)
-- **定位**：reader 2.0 正式里程碑版本。包含 3D 纸张拟真翻页模式、移动端划词快捷气泡与原生菜单彻底屏蔽、自研高亮图层、全设置面板 3 标签等宽排版、霞鹜文楷精品排版默认启用、仿安卓边缘手势返回、以及 iOS 状态栏与灵动岛全面避让。
-- **上一主版本**：`v1.0.7`
+## 1. 版本概述与设计目标
+- **版本号**：`v1.0.3`（开发分支 `dev` 维护版）
+- **项目定位**：作为 `reader` 新代际演进版本，保持现代化轻量技术栈（Vite 5 + Vue 3.4 + Pinia + Element Plus + Vert.x / SpringBoot），深度对齐原版 `reader` 的多源小说动态抓取、实时预览与阅读机制。
+- **发布策略**：严格遵循用户规范，所有功能微调、测试与构建统一提交并推送至 `dev` 分支；`main` 分支保持冻结，直至用户发出正式发版指令。
 
 ---
 
-## 2. 核心架构与功能特性清单 (2.0 Major Features)
+## 2. 本版本核心功能修复与新增 (Changelog & Root Causes)
 
-### 2.1 全新 3D 纸张拟真「仿真翻页」模式 (`Reader.vue` & `vuex.js` & `ReadSettings.vue`)
-- **视觉与交互架构**：
-  - 设置面板统一为「上下滑动」、「左右滑动」、「仿真翻页」3 项标准等宽标签。
-  - 基于客户端 CSS 3D Transform（`perspective: 1600px`、`rotateY`、`transform-origin: left center`、`backface-visibility: hidden`）独立构建仿真纸张翻折层（`.simulation-flip-container`、`.simulation-page-sheet`）。
-  - **动态光影递进**：
-    - **纸张正面 (`sheet-front`)**：翻折时动态叠加渐变背光阴影（`sheet-shadow`），角度越陡峭光影越深；
-    - **纸张背面 (`sheet-back`)**：旋转过 90 度后自然呈现当前阅读主题的纸张底色与质感纹理；
-    - **底层新页投影 (`under-page-shadow`)**：在底层新页的书脊侧投射柔和阴影，还原真实书本翻页层次感。
-  - **零服务端消耗**：所有立体几何与光影计算 100% 由手机/电脑 GPU 硬件加速渲染，性能丝滑达 60~120fps，服务器 CPU 与带宽开销为 **0%**。
-
-### 2.2 移动端选词快捷气泡与系统原生菜单彻底屏蔽 (`Reader.vue`)
-- **三合一快捷胶囊**：
-  - 长按或划选文字时，自动浮现【复制】、【添加书签】、【添加过滤规则】自研胶囊弹窗。
-- **自研高亮与原生屏蔽机制**：
-  - 通过 `range.getClientRects()` 精准捕获所选字句的多行像素选框，渲染独立半透明高亮图层（`.custom-selection-highlight`），白天（`multiply` 混合）与黑夜（`screen` 混合）通透自然。
-  - 提取完坐标后立即执行 `sel.removeAllRanges()` 脱离原生选区，从根本上彻底杜绝 iOS Safari 与 Android 浏览器自带的“拷贝/查询/翻译/搜索网页”弹窗。
-- **选词视口锁定与防误翻页机制**：
-  - 引入 `isTextSelecting` 状态锁定：划词期间强制将位移清零并冻结视口，正文稳如磐石，彻底消除手指在屏上选词时光标与正文剧烈乱跳的缺陷。
-  - 抬手拦截机制：在 `handleTouchEnd` 中检测到选词动作时，坚决阻断上一页/下一页翻页触发，杜绝刚选完字页面瞬间跳转前一页的问题。
-  - 生命周期隔离：彻底解决因为清空原生选区反向误杀弹窗导致的“气泡一瞬间就消失”Bug，配合延迟 220ms 绑定点击空白关闭机制，生命周期精准可靠。
-
-### 2.3 阅读设置面板 3 标签等宽网格排版规范 (`ReadSettings.vue`)
-- **排版重构**：
-  - 消除以往标签长短不一与换行错位的问题，全选项区域统一按 `width: calc((100% - 20px) / 3)` 弹性网格流式排版。
-  - **特殊模式**：精简为「正常」、「简洁」、「边缘识别」，简洁说明仅在开启时动态浮现。
-  - **配置方案**：精简为「内置白天」、「内置黑夜」、「自动切换」，彻底删除冗余易混淆的“方案类型”。
-
-### 2.4 正文字体升级为「文楷」并设为默认 (`config.js`)
-- 内置完整的“霞鹜文楷”（LXGW WenKai）119 切片轻量化中文字体包。
-- 系统白天与黑夜默认配置全面启用文楷（`font: 1`），字体典雅清秀，排版舒适护眼，达到纸质出版物与微信读书级水准。
-
-### 2.5 仿安卓屏幕双边缘侧滑返回书架 (`Reader.vue`)
-- 在全屏无虚拟按键场景下，从屏幕左侧边缘或右侧边缘向内轻滑（距离边缘 <= 28px），即可唤起弧形指示气泡并返回书架；内置“再次滑动确认”防误触机制。
-
-### 2.6 iOS 全面屏状态栏与灵动岛安全区避让 (`Admin.vue`)
-- 深度适配 WebKit 安全视口环境变量（`env(safe-area-inset-top)`），管理后台导航条、顶部标题栏与齐刘海/灵动岛彻底解耦，杜绝遮挡与触控失效。
-
-### 2.7 书架高并发安全与图书计数修复 (`BookShelf.kt`)
-- 重构书籍加载与刷新槽位写入机制，非刷新状态直接顺序加载，高并发刷新状态预分配槽位写入，彻底根除多端同时刷新导致的丢书与数量跳动。
+### 2.1 搜书结果“点击预览跳空白屏幕”根因彻底修复 (Search Preview & Zero-Blank-Screen Fix)
+- **用户反馈**：搜索完书籍以后，点击预览直接跳成空白屏幕，未从目标网站抓取小说并在网页展示。
+- **深入源码排查与根因分析**：
+  1. **未入架书籍缺少书源参数**：
+     - 在原版 `reader` 的设计中，从搜索结果进入阅读页时，书籍尚未加入本地书架（`getShelfBookByURL` 返回 `null`）。
+     - 后端 `BookController.kt` 在 `bookInfo == null` 时，必须依靠请求体中的 `bookSourceUrl` 参数调用 `getBookSourceString(context)` 动态查找并加载书源规则（`WebBook.getBookInfo(bookUrl)` 与 `WebBook.getChapterList(book)`）。
+     - 旧版 `Reader.vue` 请求 `/reader3/getChapterList` 和 `/reader3/getBookContent` 时仅传递了 `{ url: bookUrl.value }`，遗漏了 `bookSourceUrl: origin.value`。
+     - 后端因为找不到书源配置，直接报错返回 `"未配置书源"`。
+  2. **前端缺乏状态兜底导致完全白屏**：
+     - 当 `getChapterList` 报错时，`chapterList` 数组为空且 `loading` 结束。
+     - 视图模板中缺乏对空目录或加载异常的友好提示，导致正文视口直接渲染了一个空 `div`，用户视觉上表现为全屏空白。
+  3. **后端书源 URL 匹配差异**：
+     - 目标书源的 `bookSourceUrl` 结尾可能存在斜杠差异（如 `https://www.enjing.net/` 与 `https://www.enjing.net`），旧版代码使用严格等值比对导致书源对象匹配失败。
+- **修复方案与实现**：
+  - **前端请求参数补齐**：`Reader.vue` 中调用 `/reader3/getChapterList` 与 `/reader3/getBookContent` 时，完整携带 `{ url: bookUrl.value, bookSourceUrl: origin.value }`，确保后端无论书籍是否加入书架均能准确命中对应书源规则，实时从目标网站抓取章节目录与正文。
+  - **零白屏全链路状态卡片**：
+    - 增加 **抓取中状态（`catalogLoading`）**：全屏展示优雅旋转指示器，明确提示正在抓取目标小说《书名》与目标书源，缓解网络延迟焦虑；
+    - 增加 **抓取失败友好卡片（`catalogError`）**：展示具体错误原因，并提供 `[🔄 重新抓取]` 和 `[‹ 返回书架 / 更换书源]` 按钮，杜绝任何形式的白屏死锁；
+    - 增加 **正文加载中与失败兜底**：章节切换中提示加载状态，正文抓取失败时保留界面并支持一键重新加载。
+  - **搜索卡片交互增强**：
+    - 在主页搜索结果卡片上提供双入口操作：`[📖 立即预览]`（直接抓取并进入全屏阅读）与 `[➕ 加入书架]`（无需进入阅读即可一键收藏并刷新书架）。
+    - 阅读器顶部控制栏在发现书籍未入架时，常驻展示 `[➕ 加入书架]` 胶囊按钮，预览满意后轻点即可永久收录。
+  - **后端容错增强**：
+    - 在 `BookController.kt` 的 `getBookSourceBySourceURL` 中增加对 URL 末尾斜杠的容错剔除（`trimEnd('/')`）。
+    - 封面代理及远程抓取超时从原硬编码 3 秒延展至 10 秒。
 
 ---
 
-## 3. 构建与运行指引 (Build & Test Guide)
+### 2.2 书源健康体检误杀修复与三阶段深度体检 (3-Stage Health Inspection)
+- **问题背景**：用户反馈多组正常可访问的文学与分类小说网站（如 `wenxue88.com`, `enjing.net`, `66story.com`, `sudugu.org` 等）在后台体检时被误判为“失效”。
+- **根因分析**：
+  1. 旧版检测超时硬编码为 4.5 秒，在高并发下小说站响应通常在 3-7 秒，超时即被归入失效；
+  2. 仅以关键字 `'我的'` 测试搜书，纯文学、分类专精网站无匹配结果时直接被标为失效；
+  3. 相当一部分书源属于“发现/分类导航型书源”（仅配置 `exploreUrl`，无 `searchUrl`），调用 `searchBook` 会抛出未配置搜索规则异常，直接被误判为失效。
+- **三阶段深度体检机制**：
+  - **阶段 1（搜索规则实测）**：若书源配置了 `searchUrl`，使用可配置的高频字（默认 `'的'`）测试搜索，超时放宽至 10 秒；
+  - **阶段 2（发现分类兜底）**：若搜索无果或未配置搜索规则，解析首个发现分类页面链接，调用 `/reader3/exploreBook` 验证能否解析出书籍；
+  - **阶段 3（首页连通性探测）**：若规则暂未命中但网站完全可连通，调用 `/reader3/readRemoteSourceFile` 进行存活探针；
+  - **严格判定失效**：仅在 DNS 解析失败（`ENOTFOUND`）、连接拒绝（`ECONNREFUSED`）或硬性 404 时才标记为失效，彻底杜绝误杀可用书源。
 
-### 3.1 前端构建
-```bash
-cd web
-npm run build           # 生产环境打包（输出至 web/dist）
-```
+---
 
-### 3.2 静态资源同步与后端编译
-```bash
-# 静态资源同步至 Spring Boot 资源目录
-rm -rf src/main/resources/web/*
-cp -rf web/dist/* src/main/resources/web/
-
-# Kotlin 后端编译与生成可执行 JAR
-./gradlew compileKotlin
-./gradlew bootJar    # 输出产物：build/libs/reader-2.0.1.jar
-```
+## 3. 架构与核心文件指引
+- `web/src/views/Reader.vue`: 现代化阅读核心，包含未入架小说实时抓取解析、加入书架、零白屏状态卡片、3D仿真/滚动翻页、多角色拟人听书、白噪音伴读。
+- `web/src/views/Index.vue`: 移动端深度优化书架与找书面板，支持流式搜书卡片一键即时预览与快速入架。
+- `web/src/views/Admin.vue`: 控制台后台治理中心，8 线程并发三阶段深度体检与无损书源管理。
+- `src/main/java/com/htmake/reader/api/controller/BookController.kt`: 书籍抓取、章节列表、目录解析与正文获取控制器。
+- `src/main/java/com/htmake/reader/api/controller/BookSourceController.kt`: 书源保存、健康检查探针与远程书源获取。
