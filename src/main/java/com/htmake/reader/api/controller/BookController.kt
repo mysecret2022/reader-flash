@@ -1413,16 +1413,22 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         var bookUrl: String
         var newBookUrl: String
         var bookSourceUrl: String
+        val reqDurIndex: Int
+        val reqDurTitle: String
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
             bookUrl = context.bodyAsJson.getString("bookUrl")
             newBookUrl = context.bodyAsJson.getString("newUrl")
             bookSourceUrl = context.bodyAsJson.getString("bookSourceUrl")
+            reqDurIndex = context.bodyAsJson.getInteger("durChapterIndex", -1) ?: -1
+            reqDurTitle = context.bodyAsJson.getString("durChapterTitle", "") ?: ""
         } else {
             // get 请求
             bookUrl = context.queryParam("bookUrl").firstOrNull() ?: ""
             newBookUrl = context.queryParam("newUrl").firstOrNull() ?: ""
             bookSourceUrl = context.queryParam("bookSourceUrl").firstOrNull() ?: ""
+            reqDurIndex = context.queryParam("durChapterIndex").firstOrNull()?.toIntOrNull() ?: -1
+            reqDurTitle = context.queryParam("durChapterTitle").firstOrNull() ?: ""
         }
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("书籍链接不能为空")
@@ -1517,6 +1523,12 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             if (existBook.coverUrl.isNullOrEmpty() && !newBookInfo.coverUrl.isNullOrEmpty()) {
                 existBook.coverUrl = newBookInfo.coverUrl
             }
+            if (reqDurIndex >= 0) {
+                existBook.durChapterIndex = reqDurIndex
+            }
+            if (reqDurTitle.isNotEmpty()) {
+                existBook.durChapterTitle = reqDurTitle
+            }
 
             logger.info("setBookSource: {}", existBook)
 
@@ -1525,15 +1537,115 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             existBook
         }
 
-        // 更新目录 (加超时保护，防止换源卡死在目录拉取)
+        // 更新目录 (加超时保护，防止换源卡死在目录拉取，并基于章节名与编号智能对齐)
         try {
             withTimeoutOrNull(6000L) {
-                getLocalChapterList(newBookInfo, bookSourceString ?: "", true, userNameSpace)
+                val newChapters = getLocalChapterList(newBookInfo, bookSourceString ?: "", true, userNameSpace)
+                if (newChapters.isNotEmpty()) {
+                    val matchedIdx = findMatchedChapterIndex(newBookInfo.durChapterIndex, newBookInfo.durChapterTitle ?: "", newChapters)
+                    if (matchedIdx >= 0 && matchedIdx < newChapters.size) {
+                        newBookInfo.durChapterIndex = matchedIdx
+                        newBookInfo.durChapterTitle = newChapters[matchedIdx].title
+                        editShelfBook(newBookInfo, userNameSpace) { b ->
+                            b.durChapterIndex = matchedIdx
+                            b.durChapterTitle = newChapters[matchedIdx].title
+                            b
+                        }
+                    }
+                }
             }
         } catch (e: Exception) {
             logger.warn("setBookSource getLocalChapterList error or timeout: {}", e.message)
         }
         return returnData.setData(newBookInfo)
+    }
+
+    private val chnNumMap = mapOf(
+        '零' to 0, '一' to 1, '二' to 2, '两' to 2, '三' to 3, '四' to 4,
+        '五' to 5, '六' to 6, '七' to 7, '八' to 8, '九' to 9
+    )
+
+    private fun chineseToNumber(chnStr: String): Int? {
+        var str = chnStr.trim()
+        val digits = str.toIntOrNull()
+        if (digits != null) return digits
+        if (str.startsWith("十")) str = "一$str"
+        var total = 0
+        var section = 0
+        var number = 0
+        for (char in str) {
+            val num = chnNumMap[char]
+            if (num != null) {
+                number = num
+            } else {
+                when (char) {
+                    '十' -> { section += (if (number > 0) number else 1) * 10; number = 0 }
+                    '百' -> { section += (if (number > 0) number else 1) * 100; number = 0 }
+                    '千' -> { section += (if (number > 0) number else 1) * 1000; number = 0 }
+                    '万' -> { total += (section + number) * 10000; section = 0; number = 0 }
+                    '亿' -> { total += (section + number) * 100000000; section = 0; number = 0 }
+                }
+            }
+        }
+        total += section + number
+        return if (total > 0) total else null
+    }
+
+    private fun extractChapterNum(raw: String): Int? {
+        val s = raw.trim()
+        val zhangMatch = Regex("""第\s*([0-9零一二两三四五六七八九十百千万]+)\s*[章回节集话]""").find(s)
+        if (zhangMatch != null) {
+            val grp = zhangMatch.groupValues[1]
+            return grp.toIntOrNull() ?: chineseToNumber(grp)
+        }
+        val leadMatch = Regex("""^([0-9]{1,5})\s*[\.、\s:-]""").find(s)
+        if (leadMatch != null) {
+            return leadMatch.groupValues[1].toIntOrNull()
+        }
+        return null
+    }
+
+    private fun cleanChapterTitle(raw: String): String {
+        var s = raw.trim()
+        s = s.replace(Regex("""[\(\[\{（【［].*?[\)\]\}）】］]"""), " ")
+        s = s.replace(Regex("""^(正文\s*|VIP卷\s*|作品相关\s*|卷[一二三四五六七八九十0-9]+\s*)"""), "")
+        s = s.replace(Regex("""第\s*[0-9零一二两三四五六七八九十百千万]+\s*[章回节集话]"""), "")
+        s = s.replace(Regex("""^[0-9]{1,5}\s*[\.、\s:-]"""), "")
+        s = s.replace(Regex("""[：:\s\-_,，。·]"""), "")
+        return s.trim()
+    }
+
+    fun findMatchedChapterIndex(oldIndex: Int, oldTitle: String, newChapters: List<BookChapter>): Int {
+        if (newChapters.isEmpty()) return 0
+        if (oldTitle.isEmpty()) return oldIndex.coerceIn(0, newChapters.size - 1)
+
+        // 1. 精确完全一致匹配
+        val exactIdx = newChapters.indexOfFirst { it.title == oldTitle }
+        if (exactIdx >= 0) return exactIdx
+
+        // 2. 核心标题清洗与比对（优先离旧索引最近）
+        val cleanOld = cleanChapterTitle(oldTitle)
+        if (cleanOld.length >= 2) {
+            val matchedByCore = newChapters.indices
+                .filter {
+                    val cleanNew = cleanChapterTitle(newChapters[it].title)
+                    cleanNew == cleanOld || (cleanNew.length >= 3 && (cleanNew.contains(cleanOld) || cleanOld.contains(cleanNew)))
+                }
+                .minByOrNull { kotlin.math.abs(it - oldIndex) }
+            if (matchedByCore != null) return matchedByCore
+        }
+
+        // 3. 提取章节号比对（第10章 对齐 第十章）
+        val oldNum = extractChapterNum(oldTitle)
+        if (oldNum != null) {
+            val matchedByNum = newChapters.indices
+                .filter { extractChapterNum(newChapters[it].title) == oldNum }
+                .minByOrNull { kotlin.math.abs(it - oldIndex) }
+            if (matchedByNum != null) return matchedByNum
+        }
+
+        // 4. 原位兜底：绝不归零
+        return oldIndex.coerceIn(0, newChapters.size - 1)
     }
 
     suspend fun saveBookGroupId(context: RoutingContext): ReturnData {

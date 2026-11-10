@@ -166,6 +166,8 @@
       :author="selectedShelfBook.author"
       :book-url="selectedShelfBook.bookUrl"
       :origin="selectedShelfBook.origin"
+      :dur-chapter-index="selectedShelfBook.durChapterIndex ?? 0"
+      :dur-chapter-title="selectedShelfBook.durChapterTitle || ''"
       @change-source="handleShelfSourceChanged"
       @closed="selectedShelfBook = null"
     />
@@ -279,7 +281,8 @@ function openBook(book) {
       bookUrl: book.bookUrl,
       name: book.name,
       origin: book.origin,
-      author: book.author || ''
+      author: book.author || '',
+      index: book.durChapterIndex !== undefined && book.durChapterIndex !== null ? book.durChapterIndex : 0
     }
   });
 }

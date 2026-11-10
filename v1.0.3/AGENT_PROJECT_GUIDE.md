@@ -105,6 +105,34 @@
     - 在 `BookController.kt` 的 `saveBook` 中，对 `WebBook(bookSource).getBookInfo(book.bookUrl)` 增加完整的 `try-catch (e: Throwable)` 异常捕获；
     - 当第三方网站不可达、超时或解析失败时，记录日志并优雅降级，自动采用 `book.tocUrl = book.bookUrl` 作为目录备选地址，确保用户的加入书架行为永远 100% 成功，绝不会因目标第三方站点故障而崩溃中断！
 
+### 2.6 换源后章节索引跳回第一章 BUG 彻底修复 (Smart Chapter Alignment & Source Switch Fix)
+- **用户反馈**：比如我现在读到第十章，我要换源，换源后直接跳回了第一章。
+- **深度排查与根因分析**：
+  1. **目录拉取方法无差别清空当前章节索引**：
+     - 在旧版 `loadChapterCatalog()` 中，每次拉取到新目录后，都会无条件执行 `const queryIndex = parseInt(route.query.index || '0', 10); currentIndex.value = queryIndex; await fetchChapterContent(...)`。
+     - 用户在正常阅读翻页过程中，URL query 中的 `index` 并未实时同步，保持为 `'0'` 或未定义。
+     - 导致换源时拉取新目录后，`currentIndex` 瞬间被重置为 0（第 1 章），并立即触发第 1 章正文拉取。
+  2. **跨书源章节名称严格等值比对失败率极高**：
+     - 旧版仅依靠 `chapterList.value.findIndex(c => c.title === oldTitle)` 比对。
+     - 不同书源网站对同一章节的命名格式差异巨大（例如源 A 为 `第十章 惊天大逆转`，源 B 为 `第10章 惊天大逆转（求月票）`，源 C 为 `10. 惊天大逆转`，或带有 `[VIP]`、卷号前缀、全半角空格差异）。
+     - 严格等值比对几乎 100% 返回 `-1`（未匹配）。
+  3. **未命中时缺乏任何兜底机制**：
+     - 当标题比对返回 `-1` 时，旧代码没有任何回退方案，直接保留了被 `loadChapterCatalog` 重置的第 0 章索引。
+  4. **后端切源接口未传递阅读进度**：
+     - `/reader3/setBookSource` 未接收当前阅读的 `durChapterIndex` 与 `durChapterTitle`，后端未在换源时自动完成目录对齐。
+- **修复方案与实现**：
+  - **解耦目录加载与正文拉取**：
+    - 将 `loadChapterCatalog(autoFetch = true)` 改造为参数化控制，换源时传入 `autoFetch = false`，仅拉取新书源目录数据，绝不提前清空或重置用户的章节索引。
+  - **智能多级章节对齐算法 (`findBestMatchedChapterIndex`)**：
+    - **第 1 级（双重强匹）**：同时解析提取出中文/阿拉伯数字章节编号（如“第十章”与“第10章”统一解析为数字 10）以及过滤干扰标签（如 `(求月票)`、`【二合一】`、卷前缀、标点符号）后的核心标题；若章节编号与核心标题双重匹配，100% 命中精准对齐。
+    - **第 2 级（核心标题清洗对齐）**：若章节编号缺失，按纯净标题核心匹配，并优先选择距离原阅读索引最近的章节。
+    - **第 3 级（章节序号对齐）**：若核心标题被目标网站严重修改，按提取出的章节序号（如第 10 章）在目录中对齐，并就近匹配。
+    - **第 4 级（原位安全兜底）**：若新源目录完全无规律，自动保留原阅读章节索引（如第 10 章对应的索引 9），做边界保护（`coerceIn(0, total - 1)`），**绝对禁止跌落回第 1 章**！
+  - **前后端与 URL 状态全链路闭环**：
+    - 前端翻页与正文获取时，通过 `saveProgress` 自动同步更新路由 URL 的 `query.index`；
+    - 书架入口 `openBook` 完整携带 `index: book.durChapterIndex`；
+    - 换源抽屉 `BookSourceDrawer` 与后端 `/reader3/setBookSource` 增加 `durChapterIndex` 与 `durChapterTitle` 传参，后端在新目录生成后同步持久化对齐。
+
 ---
 
 ## 3. 架构与核心文件指引

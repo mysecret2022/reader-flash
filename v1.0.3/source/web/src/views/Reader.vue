@@ -284,6 +284,8 @@
       :author="author"
       :book-url="bookUrl"
       :origin="origin"
+      :dur-chapter-index="currentIndex"
+      :dur-chapter-title="currentChapter?.title || ''"
       @change-source="handleSourceChanged"
     />
 
@@ -679,10 +681,18 @@ async function checkBookshelfStatus() {
   try {
     const res = await axios.get('/reader3/getBookshelf');
     if (res.data && res.data.isSuccess && Array.isArray(res.data.data)) {
-      isInBookshelf.value = res.data.data.some(b =>
+      const match = res.data.data.find(b =>
         (b.bookUrl && b.bookUrl === bookUrl.value) ||
         (b.name && b.name === bookName.value && (!author.value || b.author === author.value))
       );
+      isInBookshelf.value = !!match;
+      if (match && typeof match.durChapterIndex === 'number' && match.durChapterIndex > 0) {
+        const queryIndex = parseInt(route.query.index || '0', 10);
+        if (currentIndex.value === 0 && queryIndex === 0 && chapterList.value.length > match.durChapterIndex) {
+          currentIndex.value = match.durChapterIndex;
+          await fetchChapterContent(currentIndex.value);
+        }
+      }
     }
   } catch (e) {}
 }
@@ -712,10 +722,137 @@ async function addToBookshelf() {
   }
 }
 
+// 智能中文章节数字解析
+function chineseToNumber(chnStr) {
+  const chnNumChar = { '零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 };
+  const chnNameValue = {
+    '十': { value: 10, secUnit: false },
+    '百': { value: 100, secUnit: false },
+    '千': { value: 1000, secUnit: false },
+    '万': { value: 10000, secUnit: true },
+    '亿': { value: 100000000, secUnit: true }
+  };
+  let total = 0, section = 0, number = 0;
+  let str = (chnStr || '').trim();
+  if (/^\d+$/.test(str)) return parseInt(str, 10);
+  if (str.startsWith('十')) str = '一' + str;
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i];
+    const numVal = chnNumChar[char];
+    if (typeof numVal !== 'undefined') {
+      number = numVal;
+      if (i === str.length - 1) section += number;
+    } else {
+      const unit = chnNameValue[char];
+      if (typeof unit !== 'undefined') {
+        if (unit.secUnit) {
+          section = (section + number) * unit.value;
+          total += section;
+          section = 0;
+        } else {
+          section += (number || 1) * unit.value;
+        }
+        number = 0;
+      }
+    }
+  }
+  total += section;
+  return total || null;
+}
+
+// 提取章节标题核心文本与章节数字
+function parseChapterInfo(rawTitle) {
+  if (!rawTitle) return { num: null, coreTitle: '' };
+  let title = String(rawTitle).trim();
+  // 过滤 (求月票)、【二合一】等干扰标签
+  title = title.replace(/[\(\[\{（【［].*?[\)\]\}）】］]/g, ' ').trim();
+  // 过滤卷前缀与正文标识
+  title = title.replace(/^(正文\s*|VIP卷\s*|作品相关\s*|卷[一二三四五六七八九十0-9]+\s*)/, '').trim();
+
+  let num = null;
+  const matchZhang = title.match(/第\s*([0-9零一二两三四五六七八九十百千万]+)\s*[章回节集话]/);
+  if (matchZhang) {
+    const rawNum = matchZhang[1];
+    num = /^\d+$/.test(rawNum) ? parseInt(rawNum, 10) : chineseToNumber(rawNum);
+  } else {
+    const matchLeading = title.match(/^([0-9]{1,5})\s*[\.、\s:-]/);
+    if (matchLeading) num = parseInt(matchLeading[1], 10);
+  }
+
+  let core = title.replace(/第\s*[0-9零一二两三四五六七八九十百千万]+\s*[章回节集话]/g, '');
+  core = core.replace(/^[0-9]{1,5}\s*[\.、\s:-]/, '');
+  core = core.replace(/[：:\s\-_,，。·]/g, '').trim();
+
+  return { num, coreTitle: core };
+}
+
+// 智能章节对齐算法：优先双重匹配 -> 核心名称对齐 -> 章节号对齐 -> 原位兜底
+function findBestMatchedChapterIndex(oldIndex, oldTitle, newChapterList) {
+  if (!newChapterList || newChapterList.length === 0) return 0;
+  if (!oldTitle && (oldIndex === null || oldIndex === undefined || oldIndex < 0)) return 0;
+
+  const oldInfo = parseChapterInfo(oldTitle);
+  const parsedNewList = newChapterList.map((c, idx) => ({
+    index: idx,
+    title: c.title || '',
+    ...parseChapterInfo(c.title || '')
+  }));
+
+  // 1. 双重匹配：章节编号与核心标题双重一致（置信度 100%）
+  if (oldInfo.num !== null && oldInfo.coreTitle && oldInfo.coreTitle.length >= 2) {
+    const found = parsedNewList.find(c => c.num === oldInfo.num && (c.coreTitle.includes(oldInfo.coreTitle) || oldInfo.coreTitle.includes(c.coreTitle)));
+    if (found) return found.index;
+  }
+
+  // 2. 核心标题完全相同（优先寻找离旧索引最近的章节）
+  if (oldInfo.coreTitle && oldInfo.coreTitle.length >= 2) {
+    const exactCoreMatches = parsedNewList.filter(c => c.coreTitle === oldInfo.coreTitle);
+    if (exactCoreMatches.length > 0) {
+      exactCoreMatches.sort((a, b) => Math.abs(a.index - oldIndex) - Math.abs(b.index - oldIndex));
+      return exactCoreMatches[0].index;
+    }
+    // 包含关系匹配
+    const subCoreMatches = parsedNewList.filter(c => c.coreTitle && (c.coreTitle.includes(oldInfo.coreTitle) || oldInfo.coreTitle.includes(c.coreTitle)));
+    if (subCoreMatches.length > 0) {
+      subCoreMatches.sort((a, b) => Math.abs(a.index - oldIndex) - Math.abs(b.index - oldIndex));
+      return subCoreMatches[0].index;
+    }
+  }
+
+  // 3. 章节编号匹配（如第10章对齐第十章）
+  if (oldInfo.num !== null) {
+    const numMatches = parsedNewList.filter(c => c.num === oldInfo.num);
+    if (numMatches.length > 0) {
+      numMatches.sort((a, b) => Math.abs(a.index - oldIndex) - Math.abs(b.index - oldIndex));
+      return numMatches[0].index;
+    }
+  }
+
+  // 4. 原位安全兜底：保持与旧章节索引一致，防止跌落至第一章
+  return Math.max(0, Math.min(oldIndex >= 0 ? oldIndex : 0, newChapterList.length - 1));
+}
+
 async function handleSourceChanged(newSourceInfo) {
+  // 1. 牢牢记录换源前的章节索引与章节标题
+  const oldTitle = currentChapter.value?.title || '';
+  const oldIndex = currentIndex.value;
+
   bookUrl.value = newSourceInfo.newUrl;
   if (newSourceInfo.origin) origin.value = newSourceInfo.origin;
 
+  // 2. 拉取新书源目录（传入 autoFetch = false，绝不提前强制重置为第1章）
+  await loadChapterCatalog(false);
+
+  // 3. 智能多级对齐章节
+  let targetIndex = oldIndex;
+  if (chapterList.value && chapterList.value.length > 0) {
+    targetIndex = findBestMatchedChapterIndex(oldIndex, oldTitle, chapterList.value);
+  }
+
+  currentIndex.value = targetIndex;
+  currentPageIndex.value = 0;
+
+  // 4. 同步更新路由参数
   router.replace({
     path: '/reader',
     query: {
@@ -723,27 +860,23 @@ async function handleSourceChanged(newSourceInfo) {
       bookUrl: newSourceInfo.newUrl,
       origin: newSourceInfo.origin,
       name: bookName.value,
-      author: author.value
+      author: author.value,
+      index: targetIndex
     }
   });
 
-  // 记住当前章节标题以便对齐
-  const oldTitle = currentChapter.value?.title || '';
-  await loadChapterCatalog();
+  // 5. 抓取目标章节正文
+  await fetchChapterContent(targetIndex);
 
-  // 尝试按章节名对齐
-  if (oldTitle) {
-    const matchedIdx = chapterList.value.findIndex(c => c.title === oldTitle);
-    if (matchedIdx !== -1) {
-      currentIndex.value = matchedIdx;
-    }
-  }
-  currentPageIndex.value = 0;
-  fetchChapterContent(currentIndex.value);
+  // 6. 保存最新进度至书架
+  saveProgress(targetIndex);
   checkBookshelfStatus();
+
+  const targetTitle = chapterList.value[targetIndex]?.title || `第 ${targetIndex + 1} 章`;
+  ElMessage.success(`🎉 换源成功，已自动对齐至：${targetTitle}`);
 }
 
-async function loadChapterCatalog() {
+async function loadChapterCatalog(autoFetch = true) {
   if (!bookUrl.value) return;
   catalogLoading.value = true;
   catalogError.value = '';
@@ -761,9 +894,11 @@ async function loadChapterCatalog() {
       }));
 
       if (chapterList.value.length > 0) {
-        const queryIndex = parseInt(route.query.index || '0', 10);
-        currentIndex.value = Math.max(0, Math.min(queryIndex, chapterList.value.length - 1));
-        await fetchChapterContent(currentIndex.value);
+        if (autoFetch) {
+          const queryIndex = parseInt(route.query.index || '0', 10);
+          currentIndex.value = Math.max(0, Math.min(queryIndex, chapterList.value.length - 1));
+          await fetchChapterContent(currentIndex.value);
+        }
       } else {
         catalogError.value = '目标书源返回的目录为空，可能该站点改版或防爬拦截';
       }
@@ -837,6 +972,12 @@ function saveProgress(idx) {
     axios.post('/reader3/saveBookProgress', {
       url: bookUrl.value,
       index: idx
+    });
+    router.replace({
+      query: {
+        ...route.query,
+        index: idx
+      }
     });
   } catch (e) {}
 }

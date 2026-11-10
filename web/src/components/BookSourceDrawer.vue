@@ -144,6 +144,14 @@ const props = defineProps({
   originName: {
     type: String,
     default: ''
+  },
+  durChapterIndex: {
+    type: Number,
+    default: 0
+  },
+  durChapterTitle: {
+    type: String,
+    default: ''
   }
 });
 
@@ -324,7 +332,9 @@ async function handleSelectSource(source) {
       newUrl: source.bookUrl,
       bookSourceUrl: source.origin || source.bookSourceUrl || '',
       name: props.bookName,
-      author: props.author || ''
+      author: props.author || '',
+      durChapterIndex: props.durChapterIndex,
+      durChapterTitle: props.durChapterTitle
     });
 
     if (res.data && res.data.isSuccess) {
