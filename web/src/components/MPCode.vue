@@ -11,7 +11,7 @@
     :before-close="cancel"
   >
     <el-image
-      :src="require('../assets/imgs/mpcode.jpg')"
+      :src="mpcodeImg"
       class="qrcode-img"
       fit="cover"
       lazy
@@ -21,6 +21,7 @@
 
 <script>
 import { mapGetters } from "vuex";
+import mpcodeImg from "../assets/imgs/mpcode.jpg";
 
 export default {
   model: {
@@ -29,9 +30,11 @@ export default {
   },
   name: "ReplaceRuleForm",
   data() {
-    return {};
+    return {
+      mpcodeImg
+    };
   },
-  props: ["show"],
+  props: ["show", "value", "modelValue"],
   computed: {
     ...mapGetters(["dialogSmallWidth", "dialogTop"])
   },

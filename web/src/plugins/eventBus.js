@@ -10,12 +10,23 @@ class EventBus {
     this.events[event].push(callback);
   }
 
+  $once(event, callback) {
+    const onceFn = (...args) => {
+      this.$off(event, onceFn);
+      callback(...args);
+    };
+    onceFn._callback = callback;
+    this.$on(event, onceFn);
+  }
+
   $off(event, callback) {
     if (!this.events[event]) return;
     if (!callback) {
       delete this.events[event];
     } else {
-      this.events[event] = this.events[event].filter(cb => cb !== callback);
+      this.events[event] = this.events[event].filter(
+        cb => cb !== callback && cb._callback !== callback
+      );
     }
   }
 

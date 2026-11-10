@@ -126,7 +126,7 @@ export default {
       localFileSelection: []
     };
   },
-  props: ["show"],
+  props: ["show", "value", "modelValue"],
   computed: {
     ...mapGetters(["dialogWidth", "dialogTop", "dialogContentHeight"])
   },

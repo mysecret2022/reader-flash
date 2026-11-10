@@ -60,7 +60,7 @@ export default {
       bookmarkForm: { ...defaultBookmark }
     };
   },
-  props: ["show", "bookmark", "isAdd"],
+  props: ["show", "value", "modelValue", "bookmark", "isAdd"],
   computed: {
     ...mapGetters(["dialogWidth", "dialogTop", "dialogContentHeight"])
   },

@@ -849,6 +849,7 @@ import { errorTypeList } from "../plugins/config";
 import { setCache, getCache } from "../plugins/cache";
 import eventBus from "../plugins/eventBus";
 import { formatSize, LimitResquest } from "../plugins/helper";
+import noCover from "../assets/imgs/noCover.jpeg";
 function buildURL(url, params) {
   if (!params) return url;
   const parts = [];
@@ -1134,7 +1135,6 @@ export default {
       }
 
       // 2. 启动 SSE 在线全网书源实时扫描拉取最新封面
-      const buildURL = require("axios/lib/helpers/buildURL");
       const params = {
         name: book.name,
         author: book.author || "",
@@ -1193,7 +1193,7 @@ export default {
     onCoverImgError(e) {
       if (e && e.target) {
         // 防止由于外部图床防盗链或链接失效导致卡片闪烁消失；优雅降级为本地默认封面，保持卡片和书源名称可见
-        e.target.src = require("@/assets/imgs/noCover.jpeg");
+        e.target.src = noCover;
       }
     },
     applyCover(coverUrl) {

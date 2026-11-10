@@ -85,16 +85,11 @@ def port_component(content):
     # If props: ["show"] or props contains show, use :model-value="actualShow"
     has_prop_show = re.search(r'props:\s*(?:\[[^\]]*["\']show["\'][^\]]*\]|\{[^}]*show:)', content)
     if has_prop_show:
-        content = content.replace(
-            'v-model="show"',
-            ':model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"'
-        )
-        # Add actualShow and onDialogVisibilityUpdate if not present
         if 'actualShow' not in content:
             # Add props ["show", "value", "modelValue"]
             content = re.sub(
-                r'props:\s*\[(["\'])show\1\]',
-                'props: ["show", "value", "modelValue"]',
+                r'props:\s*\[(["\'])show\1',
+                r'props: ["show", "value", "modelValue"',
                 content
             )
             # Add methods and computed
@@ -102,6 +97,7 @@ def port_component(content):
     onDialogVisibilityUpdate(val) {
       this.$emit("update:modelValue", val);
       this.$emit("update:show", val);
+      this.$emit("setShow", val);
       this.$emit("input", val);
     },'''
             content = re.sub(r'methods:\s*\{', 'methods: {' + method_injection, content, count=1)
@@ -114,6 +110,10 @@ def port_component(content):
                 content = re.sub(r'computed:\s*\{', 'computed: {' + computed_injection, content, count=1)
             else:
                 content = re.sub(r'data\(\)\s*\{', 'computed: {' + computed_injection + '\n  },\ndata() {', content, count=1)
+        content = content.replace(
+            'v-model="show"',
+            ':model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"'
+        )
 
     # 5. Vue 3 v-model compatibility for other modal components
     if "value: {" in content and "modelValue" not in content:

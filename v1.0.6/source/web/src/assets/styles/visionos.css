@@ -1,0 +1,127 @@
+/**
+ * reader-flash 视觉与阅读排版系统
+ * 规范：
+ * 1. 登录界面 (Login)：保留纯粹高透的毛玻璃 (Frosted Glass) 悬浮流萤美学。
+ * 2. 控制台 (Admin)：专业企业级管理控制台背景，数据清晰、排版严谨、零眩光干扰。
+ * 3. 阅读界面 (Reader)：出版级纯正专业纸质阅读背景（象牙白、羊皮纸、护眼绿、深邃夜、水墨灰），纯净舒适，防视疲劳。
+ */
+
+:root {
+  --primary-color: #10b981;
+  --primary-hover: #059669;
+  --primary-glow: rgba(16, 185, 129, 0.25);
+  --reader-font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+/* ========================================================
+   1. 出版级 5 套专业阅读背景 (专为沉浸阅读打磨，无反光与眩光)
+   ======================================================== */
+
+/* 主题 0: 经典象牙白 (Ivory White) - 清新纯净，纸墨分明，日常白天首选 */
+.reader-theme-0 {
+  background-color: #fbfaf7 !important;
+  color: #2b2b2b !important;
+}
+
+/* 主题 1: 传统羊皮纸 (Vintage Parchment) - 温润古典书卷质感，还原实体书纸张 */
+.reader-theme-1 {
+  background-color: #f3edd9 !important;
+  color: #3d2e1e !important;
+}
+
+/* 主题 2: 医学护眼绿 (Eye-care Sage Green) - 柔和低反光豆沙绿，长久阅读抗视疲劳 */
+.reader-theme-2 {
+  background-color: #dcead4 !important;
+  color: #1c3420 !important;
+}
+
+/* 主题 3: 专业深邃夜 (OLED True Night) - 柔和深暗黑，夜间阅读防刺眼眩光 */
+.reader-theme-3 {
+  background-color: #141518 !important;
+  color: #a6abb4 !important;
+}
+
+/* 主题 4: 电子水墨灰 (E-Ink Paper) - 模拟电子水墨屏的高清晰度与温和质感 */
+.reader-theme-4 {
+  background-color: #e5e6e8 !important;
+  color: #222426 !important;
+}
+
+/* ========================================================
+   2. 3D 纸张仿真翻页容器与双面投影 (实体纸质触感)
+   ======================================================== */
+.simulation-flip-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  perspective: 1600px;
+  transform-style: preserve-3d;
+}
+
+.simulation-page-sheet {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: left center;
+  backface-visibility: hidden;
+  will-change: transform;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* ========================================================
+   3. 专业阅读控制条 (Matte Finish 实色哑光，杜绝底层文字透光干扰)
+   ======================================================== */
+.matte-control-panel {
+  background: #181c24;
+  border: 1px solid #2d3340;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+  border-radius: 14px;
+  color: #f1f5f9;
+}
+
+/* 自研选词划线与快捷胶囊菜单 */
+.custom-selection-bubble {
+  position: fixed;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #181c24;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.45);
+  color: #ffffff;
+  font-size: 13px;
+  transform: translate(-50%, -100%);
+  animation: bubble-fade-in 0.15s ease-out;
+}
+
+.bubble-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.bubble-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #34d399;
+}
+
+@keyframes bubble-fade-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -85%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1);
+  }
+}

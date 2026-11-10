@@ -120,7 +120,7 @@ export default {
       bookGroupSelection: []
     };
   },
-  props: ["show", "isSet"],
+  props: ["show", "value", "modelValue", "isSet"],
   computed: {
     ...mapGetters(["dialogWidth", "dialogTop", "dialogContentHeight"]),
     bookGroupList() {

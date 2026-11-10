@@ -52,7 +52,7 @@ export default {
       addUserForm: { ...defaultForm }
     };
   },
-  props: ["show", "rule", "isAdd"],
+  props: ["show", "value", "modelValue", "rule", "isAdd"],
   computed: {
     ...mapGetters(["dialogSmallWidth", "dialogTop"])
   },

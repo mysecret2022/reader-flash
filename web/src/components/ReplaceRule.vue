@@ -99,7 +99,7 @@ export default {
   computed: {
     ...mapGetters(["dialogWidth", "dialogTop", "dialogContentHeight"])
   },
-  props: ["show"],
+  props: ["show", "value", "modelValue"],
   watch: {
     show(isVisible) {
       if (isVisible) {

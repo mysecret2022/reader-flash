@@ -111,7 +111,7 @@ export default {
   data() {
     return {};
   },
-  props: ["show"],
+  props: ["show", "value", "modelValue"],
   computed: {
     ...mapGetters(["dialogSmallWidth", "dialogTop"]),
     bookCoverBgStyle() {

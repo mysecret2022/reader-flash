@@ -102,7 +102,7 @@ export default {
       );
     }
   },
-  props: ["show", "book"],
+  props: ["show", "value", "modelValue", "book"],
   watch: {
     show(isVisible) {
       if (isVisible) {

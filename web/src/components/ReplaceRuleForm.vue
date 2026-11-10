@@ -50,7 +50,7 @@ export default {
       ruleForm: { ...defaultReplaceRule }
     };
   },
-  props: ["show", "rule", "isAdd"],
+  props: ["show", "value", "modelValue", "rule", "isAdd"],
   computed: {
     ...mapGetters(["dialogWidth", "dialogTop", "dialogContentHeight"])
   },

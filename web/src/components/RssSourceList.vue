@@ -73,7 +73,7 @@ export default {
       showRssSourceEditButton: false
     };
   },
-  props: ["show", "rssSource"],
+  props: ["show", "value", "modelValue", "rssSource"],
   computed: {
     ...mapGetters(["dialogSmallWidth", "dialogTop"]),
     rssSourceList() {

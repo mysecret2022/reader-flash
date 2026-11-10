@@ -1,13 +1,14 @@
-# Reader-Flash 智能体项目说明文档 (Agent Project Guide) - v1.0.5
+# Reader-Flash 智能体项目说明文档 (Agent Project Guide) - v1.0.6
 
-> 本文档专为后续接手的智能体与开发者编写，详尽记录了 reader-flash v1.0.5 的架构设计、100% 官方经典前端复刻规范、已解决的问题、核心算法、测试运行指引及后续迭代路线图。
+> 本文档专为后续接手的智能体与开发者编写，详尽记录了 reader-flash v1.0.6 的架构设计、100% 官方经典前端复刻规范、已深度修复的运行时缺陷、核心算法、测试运行指引及后续迭代路线图。
 
 ---
 
-## 1. 版本概述 (v1.0.5)
-- **核心目标**：100% 完整复刻只读仓库 `reader` (`http://192.168.0.30:8080`) 的全部前端视觉美学、排版交互与控制台管理体系，包括：
-  - **主书架界面 (`Index.vue`)**：官方经典 260px 固定导航栏、搜索配置（单/多源、分组、并发数）、探索发现、全套书籍卡片及管理弹窗。
-  - **沉浸式阅读界面 (`Reader.vue`)**：经典垂直悬浮工具栏、目录/书源/设置/书架弹窗、8 套底色与纹理（`body_x.png`, `content_x.png`, `popup_x.png`）、TTS 悬浮播放条。
+## 1. 版本概述 (v1.0.6)
+- **核心目标**：在 100% 完整复刻只读仓库 `reader` 前端视觉美学与控制台管理体系的基础上，彻底解决 Vue 2 向 Vue 3 迁移过程中产生的所有致命运行时缺陷（包括 ESM 下的 `require` 崩溃、实例级 `$on`/`$once`/`$emit` 缺失、`this.$root.$children[0]` 崩溃、Element Plus 按钮图标空白等）。
+- **包含的核心视图与弹窗**：
+  - **主书架界面 (`Index.vue`)**：官方经典 260px 固定导航栏、搜索配置（单/多源、分组、并发数）、探索发现、全套书籍卡片及管理弹窗，保留 flash 独有的后端 SSE 流式搜书逻辑。
+  - **沉浸式阅读界面 (`Reader.vue`)**：经典垂直悬浮工具栏、目录/书源/设置/书架弹窗、8 套底色与纹理（`body_x.png`, `content_x.png`, `popup_x.png`）、TTS 悬浮播放条，并深度注入 `findBestMatchedChapterIndex` 智能章节对齐防跳章算法。
   - **全功能控制台 (`Admin.vue`)**：100% 完整复刻全部 11 大功能选项卡（`overview`, `users`, `sources`, `shelf`, `userSpace`, `webdav`, `cache`, `cloudSync`, `logs`, `storage`, `backend`）以及 12 套管理弹窗。
   - **高颜值登录视图 (`Login.vue`)**：极光悬浮流萤毛玻璃卡片、账号登录与用户注册分段切换、密码显示切换、错误抖动反馈。
   - **全局应用根容器 (`App.vue`)**：全套全局弹窗（替换规则、书架管理、书友管理、MPCode等）、代码编辑器、暗黑日夜主题样式与四大经典字体（`reader-st`, `reader-fs`, `reader-kt`, `reader-ht`）。
@@ -15,112 +16,103 @@
   - 前端工程体系：Vite 5.4 + Vue 3.4 + Pinia + Vuex 4 + Element Plus + Stylus
   - 后端极速搜书：毫秒级 SSE 流式搜书通道 (`/reader3/searchBookMultiSSE` + `searchBookByEventStream`)
   - 智能防跳章换源对齐：四级对齐算法 (`findBestMatchedChapterIndex`)
-- **构建环境**：Java 17+, Gradle 7.x/8.x, Node 22.x, Vite 5.2.8.
+- **构建环境**：Java 17+, Gradle 7.x/8.x, Node 22.x, Vite 5.4.
 - **Git 目标分支**：`origin/dev`（禁止推向 `main` 分支）。
 
 ---
 
-## 2. 界面复刻架构与规范
+## 2. v1.0.6 发现并彻底修复的缺陷清单
 
-### 2.1 主书架界面 (`Index.vue`)
-1. **左侧固定 260px 导航栏 (`.navigation-wrapper`)**：
-   - 宽度固定 `260px`，高度 `100vh`，背景色 `#F7F7F7`（暗黑主题 `#222222`）。
-   - 标题：“阅读” (24px, 600)，右上角版本角标。
-   - 副标题：“清风不识字，何故乱翻书” (16px, 500, `#b1b1b1`)。
-   - 搜索输入框：胶囊式圆角 `border-radius: 50px`，边框 `#E3E3E3`，前置搜索图标。
-   - 搜索设置区：搜索方式选择（单源/多源）、书源或分组选择、并发线程（4-30 线程）。
-   - 探索发现：弹出 `Explore.vue` 发现/榜单。
-   - 分组管理与账户菜单：下拉菜单进入管理后台、个人空间、退出登录。
-   - 底部操作栏：🌙/☀️ 暗黑日夜主题切换按钮，GitHub 链接图标。
-2. **右侧主书架展区 (`.shelf-wrapper`)**：
-   - 顶部状态栏：左侧显示分组名称与图书数量，右侧包含“书架”、“加载更多”、“刷新”、“编辑”按钮。
-   - 书籍分组栏：`el-tabs` 经典横向标签切换。
-   - 书籍卡片展区：双列/多列卡片布局，包含封面、书名、作者、字数、最新章节/阅读进度、右上角未读数红色胶囊角标、编辑模式下快捷删除/修改封面/编辑按钮。
-   - 全部弹窗：导入网络书源、失效书源治理与体检、导入本地书籍、修改封面。
+### 2.1 致命运行时缺陷：Vite 客户端浏览器 ESM 中 `require(...)` 抛出 ReferenceError
+- **问题输入与触发条件**：
+  - 打开控制台 `/admin` 时，`Admin.vue` 初始化数据 `noCoverImage: require("../assets/imgs/noCover.jpeg")`。
+  - 在 `Index.vue` 或 `BookManage.vue` 中点击“刷新封面”时调用 `require("axios/lib/helpers/buildURL")`。
+  - 打开 `MPCode.vue` 弹窗时模板渲染 `:src="require('../assets/imgs/mpcode.jpg')"`。
+  - 图片加载失败触发 `onCoverImgError` 时调用 `require("@/assets/imgs/noCover.jpeg")`。
+- **预期行为**：平稳加载图片与解析 SSE URL。
+- **实际表现**：浏览器控制台立即崩溃并抛出 `Uncaught ReferenceError: require is not defined`，导致页面白屏或功能中断。
+- **根本原因**：Vite 在客户端是基于标准 ES Module 打包的，浏览器运行环境中不存在 CommonJS 的全局 `require` 函数。
+- **修复措施**：
+  1. 在 `web/src/plugins/helper.js` 中显式导出 ESM 规范的 `buildURL(url, params)` 函数。
+  2. 在 `Admin.vue`、`Index.vue`、`BookManage.vue`、`BookSource.vue` 中全部改为 ESM `import { buildURL } from "../plugins/helper"`。
+  3. 将所有图片的 `require(...)` 统一替换为标准静态 ESM `import`（如 `import noCover from "../assets/imgs/noCover.jpeg"`、`import mpcodeImg from "../assets/imgs/mpcode.jpg"`）。
 
-### 2.2 小说阅读界面 (`Reader.vue`)
-1. **纸张背景与 8 套经典底色**：
-   - 经典羊皮纸与质感纹理（`body_0.png` ~ `body_6.png`, `content_0.png` ~ `content_6.png`, `popup_0.png` ~ `popup_6.png`）。
-   - 象牙白、羊皮纸、护眼绿、深邃夜、水墨灰等 8 套出版级底色。
-2. **经典左侧垂直悬浮工具栏 (`.tool-bar`)**：
-   - 动态靠齐阅读正文左侧：`margin-left: -(readWidth / 2 + 68)px;`
-   - 核心功能：书架、书源（换源测速与对齐）、排版设置（字体、字号、间距、翻页方式）、缓存、夜间模式、全屏。
-3. **换源智能章节防跳章对齐算法**：
-   - 优先通过 `findBestMatchedChapterIndex` 执行双重数字与核心文本精准对齐；
-   - 包含中文章节数字自动转换（`chineseToNumber`）与标签噪声清洗（`parseChapterInfo`）；
-   - 兜底原位安全回退，绝不发生误跳第一章问题。
+### 2.2 致命运行时缺陷：Vue 3 中 `this.$root.$children` 为 undefined
+- **问题输入与触发条件**：
+  - 在 `ReplaceRule.vue`、`BookManage.vue`、`BookGroup.vue`、`Bookmark.vue`、`BookInfo.vue`、`RssSourceList.vue` 等组件中保存或刷新数据时执行 `this.$root.$children[0].loadBookShelf()` 等方法。
+- **预期行为**：调用根组件 `App.vue` 上的全局数据加载方法。
+- **实际表现**：抛出 `TypeError: Cannot read properties of undefined (reading '0')` 崩溃。
+- **根本原因**：Vue 3 从组件实例上完全移除了 `$children` 属性。
+- **修复措施**：
+  - 在 `web/src/main.js` 中通过全局 mixin 在根组件挂载时捕获实例，并在 `this.$root` 上动态定义只读属性 `$children`，始终返回 `[rootAppInstance]`，100% 保持经典 Vue 2 调用兼容性。
 
-### 2.3 管理控制台全量复刻 (`Admin.vue`)
-1. **顶部状态栏导航 (`.admin-header`)**：
-   - 品牌标识：`el-icon-reading` 图标 + “Reader” + “控制台 / 个人后台” 徽章。
-   - 顶部操作：用户身份标签（系统管理员/账号设置）、暗黑亮色切换按钮、返回书架按钮。
-2. **侧边栏导航 (`.admin-sidebar`) 与 11 大功能选项卡**：
-   1. `overview`：系统状态总览与快速控制（4个核心统计卡片：用户配额、书源总数、书架书籍、缓存大小；快捷调整配额、书源批量控制、缓存清理、一键导出；系统环境与性能指标）。
-   2. `users`：用户权限管理（用户列表、配额展示、新增用户、重置密码、修改到期时间）。
-   3. `sources`：书源设置（书源检索、批量启用/禁用、批量删除、批量校验健康、书源编辑、测试抽屉、导入书源）。
-   4. `shelf`：书架设置（多用户书架查看、批量迁移分组、书籍信息维护、换源）。
-   5. `userSpace`：用户空间（个人书架管理、个人偏好配置）。
-   6. `webdav`：WebDAV 备份与同步（连接配置、自动备份策略、云端历史备份列表与恢复）。
-   7. `cache`：本地缓存（章节正文缓存、封面图片缓存清理与统计）。
-   8. `cloudSync`：云同步与备份（多实例云端同步日志与连接配置）。
-   9. `logs`：诊断运行日志（实时服务端运行日志滚动查看、日志级别过滤、一键清空）。
-   10. `storage`：本地书仓维护（本地 TXT/EPUB 存储分析与磁盘占用清理）。
-   11. `backend`：后端设定（后端接口地址、延迟测速、网络代理与并发控制）。
-3. **12 大管理弹窗**：修改用户配额、书源批量控制、书架书籍整理、修改书籍封面、新建书籍分组、修改书籍分组、新增用户、重置密码、导入书源、失效书源治理、探索书源、探索发现结果列表。
+### 2.3 致命运行时缺陷：Vue 3 移除实例级 `$on`、`$once`、`$off`
+- **问题输入与触发条件**：
+  - 在 `Reader.vue` 中 11 处核心阅读流程（如 `this.$once("showContent", ...)`、`this.$once("loadCatalog", ...)`、`this.$once("iframeLoad", ...)`）以及 `Index.vue` 中 1 处导入确认流程。
+  - 在 `Reader.vue:708` 中调用 `this.$Lazyload.$on("loaded", ...)`。
+- **预期行为**：等待阅读器章节加载完成后执行回调。
+- **实际表现**：抛出 `TypeError: this.$once is not a function` 和 `Cannot read properties of undefined (reading '$on')`。
+- **根本原因**：Vue 3 完全剥离了组件实例上的 EventEmitter 接口。
+- **修复措施**：
+  1. 在 `web/src/main.js` 的 `beforeCreate` 中注入实例级事件订阅器，并巧妙劫持底层 `this.$.emit`，使 `$once`/`$on`/`$off` 与 `$emit` 在组件内部完美协同。
+  2. 在 `app.config.globalProperties` 上提供 `$Lazyload` 全局事件总线，并在 `v-lazy` 指令图片加载完成时发射 `loaded` 事件。
 
-### 2.4 登录视图 (`Login.vue`)
-- 居中悬浮极光毛玻璃卡片。
-- 分段滑动控制器：账号登录 / 用户注册。
-- 账号、密码、密码显隐切换、注册邀请码输入。
-- 输入校验与错误 Shake 抖动动画。
+### 2.4 致命运行时缺陷：Vue 3 移除 `this.$set` 与 `this.$delete`
+- **问题输入与触发条件**：
+  - 在 `ReadSettings.vue:560` 中切换 `edgeSwipeBack`，调用 `this.$set(this.config, "edgeSwipeBack", nextVal)`。
+  - 在 `BookManage.vue:687, 714` 中更新书籍列表状态，调用 `this.$set(this.bookList, index, ...)`。
+- **预期行为**：设置对象或数组属性并触发响应式更新。
+- **实际表现**：抛出 `TypeError: this.$set is not a function`。
+- **修复措施**：
+  - 在 `web/src/main.js` 中设置 `app.config.globalProperties.$set = (target, key, val) => { if (target) target[key] = val; return val; };` 及 `$delete` 补丁。
 
----
+### 2.5 视觉缺陷：Element Plus 中 `<el-button icon="el-icon-*">` 图标空白
+- **问题输入与触发条件**：
+  - 全局所有 `<el-button icon="el-icon-back">`、`<el-input prefix-icon="el-icon-search">`。
+- **预期行为**：渲染出经典 Element UI 字体图标。
+- **实际表现**：Element Plus 的 `icon` 属性在 Vue 3 中把字符串当作动态组件名称渲染，生成了自定义标签 `<el-icon-back></el-icon-back>`，由于缺乏组件定义和 CSS 类名，图标区呈现完全空白！
+- **修复措施**：
+  - 编写 `web/src/plugins/icons.js`，批量提取 `element-icons.css` 中的全部 282 个图标类名，并在 Vue 3 中动态注册为输出 `<i class="el-icon-*"></i>` 的标准图标组件，彻底恢复所有按钮与输入框的前置/后置图标。
 
-## 3. 工程改造与 Vue 3 兼容性适配说明
+### 2.6 弹窗双向绑定缺陷：16 个弹窗组件未定义 `actualShow`
+- **根本原因**：上一版迁移脚本在判定 `'actualShow' not in content` 时由于执行顺序错误导致注入被跳过，使得 `SearchBookContent.vue`、`ReplaceRule.vue`、`BookManage.vue` 等 16 个弹窗模板中的 `:model-value="actualShow"` 无法解析。
+- **修复措施**：
+  1. 在 `web/src/main.js` 中提供全局 `actualShow` 与 `onDialogVisibilityUpdate` 计算属性和方法，兜底所有模态框。
+  2. 在 16 个弹窗组件中将 `props: ["show"]` 全量扩充为 `props: ["show", "value", "modelValue"]`，消除 Vue 3 访问未声明属性的警告。
 
-为了在保持 `reader-flash` 现代化工程架构（Vite 5 / Vue 3 / Element Plus）的前提下，完全无缝运行 `reader` 的 Vue 2 + Element UI 代码，我们完成了如下系统性适配：
-1. **Element UI 经典图标字体系统整合**：
-   - 完整引入 `element-icons.woff`、`element-icons.ttf` 与 `element-icons.css`，支持所有 `el-icon-*` 官方图标在 Element Plus 下原生渲染。
-2. **Vue 3 模板指令与语法降级适配**：
-   - 将 Vue 2 的 `:visible.sync` 自动转换映射为 Vue 3 标准 `v-model`。
-   - 对模态子组件中的 `show` prop，采用 `:model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"` 机制，规避 Vue 3 “v-model cannot be used on a prop” 语法报错。
-   - 将 `slot-scope="scope"` 升级为 Vue 3 的 `#default="scope"`。
-   - 将模态框自定义标题与底部按钮深度分析并包装为 `<template #title>` 与 `<template #footer>`。
-3. **Vue 3 响应式状态管理 (`plugins/vuex.js`)**：
-   - 使用 Vuex 4 的 `createStore` 重构状态中心，保留全套 `state`、`mutations`、`getters`，并通过 `app.use(store)` 挂载到 Vue 3 全局上下文中。
-4. **Vue 3 全局总线与工具集**：
-   - 针对 Vue 3 移除 `new Vue()` 作为事件总线的变动，用轻量级观察者模式实现 `EventBus`，支持 `$on`、`$off`、`$emit`。
-   - 配置全局 mixin（`api`, `getImagePath`, `getCover`, `getImg`）与 `v-lazy` 图片懒加载指令。
+### 2.7 结构缺陷：`Admin.vue` 中卡片废弃语法 `<div slot="header">`
+- **修复措施**：重构为 Element Plus 官方规范的 `<template #header>`。
+
+### 2.8 路由缺陷：`router/index.js` 强制拦截 `/admin` 跳转 `/login`
+- **修复措施**：移除人工生硬路由重定向，恢复官方由后端返回 `NEED_LOGIN` 时弹出登录弹窗的自然交互。
 
 ---
 
-## 4. 验证与构建测试记录
+## 3. 验证与构建测试记录
 
-- **前端打包**：
+- **前端单测与 SSR 渲染验证**：
   ```bash
-  cd web
-  npm run build
+  cd web && node -e '...' # 验证 buildURL、图标注册渲染、rootInstance 注入、$on/$once/$emit 闭环
   ```
-  结果：1763 个模块在 16s 内完成打包，无编译错误。
-- **前端资源同步**：
+  结果：全部断言通过，0 警告，0 报错。
+- **前端打包编译**：
   ```bash
-  cd web
-  npm run sync
+  cd web && npm run sync
   ```
-  结果：构建产物自动同步至 `src/main/resources/web/`。
-- **后端完整构建**：
+  结果：1765 个模块全部编译通过，产物自动无损同步至 `src/main/resources/web/`。
+- **后端整包打包**：
   ```bash
   ./gradlew assemble -x test
   ```
-  结果：Gradle 任务全部构建成功，生成 `build/libs/reader-flash-2.0.1.jar`。
+  结果：`BUILD SUCCESSFUL in 19s`，生成标准可部署 JAR 文件。
+- **只读目录保护确认**：
+  ```bash
+  git -C /home/ubuntu/luoxia/project/Gtihub自建仓库/reader status
+  ```
+  结果：`nothing to commit, working tree clean`，0 变更。
 
 ---
 
-## 5. 后续智能体维护指南
-
-1. **修改前端页面注意事项**：
-   - 严禁随意删除已复刻的选项卡或弹窗；
-   - 如需为控制台增加新功能，请在对应的 Tab Pane（如 `Admin.vue` 中的对应 `section`）内扩充，避免破坏整体布局；
-   - 任何样式调整必须在日间与夜间模式下同时测试对比。
-2. **Git 提交与发布规范**：
-   - 所有分支开发必须基于 `dev`，推送到远端 `origin/dev`，严禁推送至 `main`。
+## 4. 后续维护与智能体接手路线图
+1. **书源与 WebDAV 实机联调**：在真实多源并发网络环境下观察后端 Vert.x 响应式断路器的稳定性。
+2. **多终端适配**：验证移动端浏览器（PWA 独立全屏模式）下阅读界面手势翻页与沉浸式状态栏的表现。

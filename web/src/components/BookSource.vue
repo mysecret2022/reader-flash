@@ -86,7 +86,7 @@
 <script>
 import jump from "../plugins/jump";
 import Axios from "../plugins/axios";
-const buildURL = require("axios/lib/helpers/buildURL");
+import { buildURL } from "../plugins/helper";
 
 export default {
   name: "BookSource",

@@ -78,7 +78,7 @@ export default {
       page: 1
     };
   },
-  props: ["show", "rssSource"],
+  props: ["show", "value", "modelValue", "rssSource"],
   computed: {
     ...mapGetters(["dialogSmallWidth", "dialogTop"]),
     rssArticleImageList() {

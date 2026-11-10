@@ -132,7 +132,7 @@ export default {
       manageUserSelection: []
     };
   },
-  props: ["show"],
+  props: ["show", "value", "modelValue"],
   computed: {
     ...mapGetters(["dialogWidth", "dialogTop", "dialogContentHeight"]),
     userList: {

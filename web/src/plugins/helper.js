@@ -1,5 +1,16 @@
 // import { Message } from "element-ui";
-import { getCache } from "../plugins/cache";
+import { getCache } from "./cache.js";
+
+export const buildURL = function(url, params) {
+  if (!params) return url;
+  const parts = [];
+  for (const [key, val] of Object.entries(params)) {
+    if (val !== null && typeof val !== "undefined" && val !== "") {
+      parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(val)}`);
+    }
+  }
+  return parts.length ? `${url}?${parts.join("&")}` : url;
+};
 
 export const formatSize = function(value, scale) {
   if (value == null || value == "") {

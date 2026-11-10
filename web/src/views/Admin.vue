@@ -1032,11 +1032,13 @@
             </div>
             <div class="user-config-cards">
               <el-card shadow="hover" class="user-config-card">
-                <div slot="header">
-                  <span style="font-weight: bold;"
-                    ><i class="el-icon-upload2"></i> 备份用户配置</span
-                  >
-                </div>
+                <template #header>
+                  <div>
+                    <span style="font-weight: bold;"
+                      ><i class="el-icon-upload2"></i> 备份用户配置</span
+                    >
+                  </div>
+                </template>
                 <p class="user-config-desc">
                   将当前终端已保存的阅读习惯（字体、背景、翻页方式）、书架分组与排序方案、搜索配置等备份至后端服务器。
                 </p>
@@ -1052,11 +1054,13 @@
               </el-card>
 
               <el-card shadow="hover" class="user-config-card">
-                <div slot="header">
-                  <span style="font-weight: bold;"
-                    ><i class="el-icon-download"></i> 同步用户配置</span
-                  >
-                </div>
+                <template #header>
+                  <div>
+                    <span style="font-weight: bold;"
+                      ><i class="el-icon-download"></i> 同步用户配置</span
+                    >
+                  </div>
+                </template>
                 <p class="user-config-desc">
                   从后端服务器拉取之前备份的用户配置数据，覆盖当前终端本地存储并即时生效。
                 </p>
@@ -2593,11 +2597,12 @@
 
 <script>
 import Axios from "../plugins/axios";
-import { LimitResquest } from "../plugins/helper";
+import { LimitResquest, buildURL } from "../plugins/helper";
 import eventBus from "../plugins/eventBus";
 import { getCache, setCache } from "../plugins/cache";
 import WebDAV from "../components/WebDAV.vue";
 import Explore from "../components/Explore.vue";
+import noCoverImage from "../assets/imgs/noCover.jpeg";
 
 export default {
   name: "AdminView",
@@ -2650,7 +2655,7 @@ export default {
       customCoverInput: "",
       candidateCovers: [],
       loadingCovers: false,
-      noCoverImage: require("../assets/imgs/noCover.jpeg"),
+      noCoverImage: noCoverImage,
       logLines: 50,
       logErrorOnly: false,
       showAddUser: false,
@@ -3925,7 +3930,6 @@ export default {
         });
         seen.add(book.coverUrl);
       }
-      const buildURL = require("axios/lib/helpers/buildURL");
       const params = {
         name: book.name,
         author: book.author || "",

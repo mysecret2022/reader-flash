@@ -18,17 +18,4 @@ const router = createRouter({
   routes
 });
 
-router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('accessToken') || localStorage.getItem('userToken');
-  const isLoginPage = to.path === '/login';
-
-  if (!token && !isLoginPage && to.path.startsWith('/admin')) {
-    next({ path: '/login', query: { redirect: to.fullPath } });
-  } else if (token && isLoginPage) {
-    next('/');
-  } else {
-    next();
-  }
-});
-
 export default router;
