@@ -1,66 +1,47 @@
-# Reader-Flash 智能体项目说明文档 (Agent Project Guide) - v1.0.7
+# Reader-Flash 智能体项目说明文档 (Agent Project Guide) - v1.0.8
 
-> 本文档专为后续接手的智能体与开发者编写，详尽记录了 reader-flash v1.0.7 的架构设计、100% 官方经典前端复刻规范、已深度修复的运行时缺陷、核心算法、测试运行指引及后续迭代路线图。
+> 本文档专为后续接手的智能体与开发者编写，详尽记录了 reader-flash v1.0.8 的架构设计、Vue 3 JSX 正文渲染深度修复、第三方书源适配状态、测试运行指引及后续迭代路线图。
 
 ---
 
-## 1. 版本概述 (v1.0.7)
-- **核心目标**：彻底根除首屏启动时的本地缓存崩溃报错，并解决后端资源路径拦截冲突导致的全部经典图标 404 缺失问题，实现官方经典视觉样式与图标系统的 100% 完美复刻与稳定运行。
+## 1. 版本概述 (v1.0.8)
+- **核心目标**：彻底修复在 Vue 3 + JSX 架构下由于历史 `domPropsInnerHTML` 语法失效导致小说标题正常呈现但正文主要内容渲染为空白的致命缺陷；全面兼容普通阅读与滚动阅读模式下的文本及漫画渲染；并修复音频播放器的事件绑定机制。
 - **构建环境**：Java 17+, Gradle 7.x/8.x, Node 22.x, Vite 5.4.
 - **Git 目标分支**：`origin/dev`（严禁推向 `main` 分支）。
 
 ---
 
-## 2. v1.0.7 修复的致命缺陷与根本原因深度剖析
+## 2. v1.0.8 发现并彻底修复的缺陷清单
 
-### 2.1 运行时缺陷：`Cannot read properties of undefined (reading 'setItem')` 与 `(reading 'getItem')`
+### 2.1 致命渲染缺陷：小说仅显示标题，正文主要内容完全空白
 - **问题输入与触发条件**：
-  - 页面初次加载或刷新时，`App.vue` 中的 `loadBookShelf`、`loadBookGroup`、`loadReplaceRules` 分别发起请求。
-  - 请求流经 `plugins/helper.js` 中的 `networkFirstRequest` 和 `cacheFirstRequest`，直接调用 `window.$cacheStorage.getItem` 与 `window.$cacheStorage.setItem`。
+  - 进入任何小说的阅读界面（如《天道图书馆》、《饲养全人类》等）。
+  - 章节目录和小说标题通过 `<h3>{this.title}</h3>` 成功渲染。
+  - 正文数据通过后端接口 `/reader3/getBookContent` 成功获取。
 - **实际表现**：
-  - 控制台连续抛出 3 条红字致命异常：
-    1. `后端连接失败 TypeError: Cannot read properties of undefined (reading 'setItem')`
-    2. `加载分组列表失败 TypeError: Cannot read properties of undefined (reading 'getItem')`
-    3. `加载替换规则失败 TypeError: Cannot read properties of undefined (reading 'getItem')`
+  - 页面上可以看到醒目的章节标题（如“第41章 赌宝”），但下方本应显示正文的区域一片空白，没有任何小说段落文字。
 - **根本原因**：
-  - 在官方原版 `reader/web/src/main.js` 中，通过 `localforage.createInstance({ name: "cacheStorage" })` 初始化并挂载了 `window.$cacheStorage`。
-  - 在 `reader-flash` 迁移到 Vite + Vue 3 后，`main.js` 漏掉了 `localforage` 的初始化逻辑，导致 `window.$cacheStorage` 为 `undefined`。
+  - 在 Vue 2 JSX 中，`<p style={this.pStyle} domPropsInnerHTML={a} />` 是设置节点内部 HTML 的标准语法（编译为 `domProps: { innerHTML: a }`）。
+  - 但在迁移到 Vue 3 + `@vue/babel-plugin-jsx` 之后，编译器将 `domPropsInnerHTML={a}` 作为普通的自定义属性 `dompropsinnerhtml="..."` 传递给 VNode。
+  - Vue 3 底层 `runtime-dom` 的 `patchDOMProp` 仅识别标准的 `innerHTML` 和 `textContent`，其他属性全部通过 `setAttribute` 写入 HTML 标签。
+  - 最终浏览器生成的 DOM 为：
+    ```html
+    <p style="..." dompropsinnerhtml="这是小说正文段落文字..." data-pos="12"></p>
+    ```
+    正文文本被当作属性值塞入，标签内部没有实际文字子节点，导致正文视觉上呈现 100% 彻底空白！
 - **修复措施**：
-  1. 在 `web/src/main.js` 中引入 `localforage`，初始化 `window.$cacheStorage = localforage.createInstance({ name: 'cacheStorage' })`。
-  2. 在 `main.js` 中同时提供带有 in-memory Map 及 localStorage 回退机制的健全对象，即使在极端环境或隐私模式下也能安全执行 `getItem`/`setItem`/`removeItem`，绝不抛出 undefined 错误。
-  3. 在 `web/src/plugins/helper.js` 中编写 `getCacheStorage()` 保护函数，在 `networkFirstRequest` 和 `cacheFirstRequest` 中统一通过保护函数访问缓存，双重保障零异常。
-
-### 2.2 视觉与静态资源缺陷：图标全部失效与字体 404
-- **问题表现**：
-  - 界面上所有按钮图标、书架操作图标、控制台图标、阅读器操作图标均无法显示。
-  - 浏览器控制台报 `GET /assets/element-icons-B-tDfklg.woff 404 Not Found` 及 `GET /assets/iconfont-PstzbNMW.woff 404 Not Found`。
-- **根本原因**：
-  - 后端 Vert.x 路由在 `YueduApi.kt:107` 中明确注册了静态路由：
-    `router.route("/assets/*").handler(StaticHandler.create().setAllowRootFileSystemAccess(true).setWebRoot(assetsDir)...)`
-    该路由专门用于挂载用户磁盘上的 `storage/assets/` 目录！
-  - Vite 默认的打包产物输出目录为 `assetsDir: 'assets'`，生成的资源 URL 均为 `/assets/...`。
-  - 当前端请求 `/assets/element-icons-*.woff` 时，请求被后端的 `storage/assets/` 拦截器捕获并在磁盘目录中寻找，而不是从 classpath 中的前端 `web/` 静态包中获取，直接导致 404 错误！
-  - 字体加载失败导致所有基于 `iconfont` 和 `element-icons` 的图标完全失去字形支持。
-- **修复措施**：
-  1. 在 `web/vite.config.js` 中配置 `base: './'` 并将静态资源输出目录指定为 `assetsDir: 'static'`。
-  2. 构建打包产物全部生成在 `static/` 目录下（如 `dist/static/element-icons-*.woff`、`dist/static/iconfont-*.woff`、`dist/static/index-*.css` 等），彻底避开后端的 `/assets/*` 路由拦截。
-  3. 更新 `web/src/assets/fonts/iconfont.css` 与 `web/src/assets/fonts/element-icons.css`，补齐规范的字体展示属性与样式类选择器。
-  4. 彻底删除旧构建残留目录 `src/main/resources/web/assets`，重新构建并将 `dist/*` 同步至 `src/main/resources/web/`。
-  5. 执行 `./gradlew assemble -x test` 重新打包后端 jar，经测试构建 100% 成功。
+  1. 将 `web/src/components/Content.vue` 中所有单章与滚动章节渲染的 `domPropsInnerHTML={a}` 彻底替换为 Vue 3 标准的 `innerHTML={a}`。
+  2. 针对 `this.content` 与 `chapter.content` 增加了 `(this.content || "").split(/\n+/)` 安全非空守卫，杜绝加载过程中的空指针风险。
+  3. 修复 `renderAudio()` 中遗留的 Vue 2 模板事件语法 `vOn:*`，重构为标准的 Vue 3 JSX 规范事件监听（如 `onLoadedmetadata`、`onProgress`、`onEnded` 等），并重构带有修饰符的点击事件阻止冒泡和默认行为。
 
 ---
 
-## 3. 项目架构与关键目录索引
-
-- `src/main/java/`：Kotlin/Java 后端核心业务逻辑，包含 Vert.x REST API (`YueduApi.kt`)、书源解析执行引擎及 SSE 流式搜书通道。
-- `src/main/resources/web/`：后端内嵌的前端静态部署目录（由 `web/` 构建产物同步而来）。
-- `web/`：Vue 3 + Vite 5 前端源码仓库。
-  - `web/src/App.vue`：应用根组件与全局弹窗中枢。
-  - `web/src/views/Index.vue`：经典书架主界面与毫秒级 SSE 流式搜书。
-  - `web/src/views/Reader.vue`：全沉浸式小说阅读器，含智能防跳章换源对齐。
-  - `web/src/views/Admin.vue`：全功能控制台（11 大管理选项卡）。
-  - `web/src/plugins/icons.js`：Element UI 经典图标在 Vue 3 下的动态桥接组件。
-  - `web/src/plugins/helper.js`：全局通用工具类、缓存降级与防崩溃包装。
+## 3. 业务书源层面的“有标题无内容”现象排查总结
+- **现象分析**：在实际使用某些特定第三方书源时，也会出现“有标题但没有正文”的现象，其核心机制在于：
+  1. **目录接口与正文接口独立运行**：目录（`getChapterList`）仅抓取章节标题和网页链接，速度快且容易成功；正文（`getBookContent`）则是点击章节时按需抓取。
+  2. **第三方站点规则失效或反爬**：某些书源的正文抽取规则年久失修（如 JavaScript 脚本解析报错、目标站点反爬拦截、或站点已停服），导致目录能抓到章节标题，但正文返回空或报错。
+  3. **未配置书源**：在“换源”时若选用了尚未在用户书源库中建立完整有效规则的源，后端会返回“未配置书源”。
+- **使用建议**：遇到此类情况时，通过右侧侧边栏【书源】抽屉点击【一键换源】或手动挑选响应速度正常、章节最新的书源（如“品书小说网8”等）即可畅快阅读。
 
 ---
 
@@ -69,11 +50,7 @@
 ### 前端开发与构建
 ```bash
 cd web
-# 本地热更新调试
-npm run dev
-
-# 编译并同步到后端资源目录
-npm run sync
+npm run sync # 编译前端并将产物同步至后端 classpath
 ```
 
 ### 后端打包与验证
@@ -85,6 +62,6 @@ npm run sync
 ---
 
 ## 5. 后续维护注意事项
-1. **静态资源路径**：切勿在 `vite.config.js` 中将 `assetsDir` 改回 `assets`，否则会与 `YueduApi.kt` 的 `/assets/*` 磁盘目录路由再次冲突。
+1. **JSX 语法规范**：在 Vue 3 JSX 中动态输出 HTML 必须统一使用 `innerHTML={val}`，严禁使用 Vue 2 的 `domPropsInnerHTML`。
 2. **只读保护约束**：绝对禁止直接或间接修改只读仓库 `/home/ubuntu/luoxia/project/Gtihub自建仓库/reader` 下的任何文件。
 3. **Git 提交**：始终推送到 `origin/dev` 分支。

@@ -60,7 +60,7 @@ export default {
           }}
         >
           {this.isCbz ? null : <h3 data-pos={0}>{this.title}</h3>}
-          {this.content.split(/\n+/).map(a => {
+          {(this.content || "").split(/\n+/).map(a => {
             a = a.replace(/^\s+/g, "");
             if (!a) {
               return null;
@@ -76,14 +76,14 @@ export default {
               return (
                 <div
                   style={this.containerStyle}
-                  domPropsInnerHTML={a}
+                  innerHTML={a}
                   data-pos={pos}
                 ></div>
               );
             }
             // 文本内容
             return (
-              <p style={this.pStyle} domPropsInnerHTML={a} data-pos={pos} />
+              <p style={this.pStyle} innerHTML={a} data-pos={pos} />
             );
           })}
         </div>
@@ -228,7 +228,7 @@ export default {
                 data-index={chapter.index}
               >
                 {this.isCbz ? null : <h3 data-pos={0}>{chapter.title}</h3>}
-                {chapter.content.split(/\n+/).map(a => {
+                {(chapter.content || "").split(/\n+/).map(a => {
                   a = a.replace(/^\s+/g, "");
                   if (!a) {
                     return null;
@@ -244,7 +244,7 @@ export default {
                     return (
                       <div
                         style={this.containerStyle}
-                        domPropsInnerHTML={a}
+                        innerHTML={a}
                         data-pos={pos}
                       ></div>
                     );
@@ -253,7 +253,7 @@ export default {
                   return (
                     <p
                       style={this.pStyle}
-                      domPropsInnerHTML={a}
+                      innerHTML={a}
                       data-pos={pos}
                     />
                   );
@@ -271,23 +271,22 @@ export default {
             ref="audio"
             preload="preload"
             src={this.content}
-            vOn:loadMetaData={this.audioEvent}
-            vOn:progress={this.onProgress}
-            vOn:playing={this.onProgress}
-            vOn:timeupdate={this.onTimeupdate}
-            vOn:play={this.onPlay}
-            vOn:pause={this.onPause}
-            vOn:ended={this.onEnd}
-            vOn:error={this.onError}
-            vOn:seeked={this.onSeeked}
-            vOn:seeking={this.onSeeking}
-            vOn:stalled={this.audioEvent}
-            vOn:suspend={this.onsuspend}
-            vOn:loadeddata={this.audioEvent}
-            vOn:loadedmetadata={this.audioEvent}
-            vOn:canplay={this.onCanPlay}
-            vOn:canplaythrough={this.audioEvent}
-            vOn:waiting={this.onWaiting}
+            onLoadedmetadata={this.audioEvent}
+            onProgress={this.onProgress}
+            onPlaying={this.onProgress}
+            onTimeupdate={this.onTimeupdate}
+            onPlay={this.onPlay}
+            onPause={this.onPause}
+            onEnded={this.onEnd}
+            onError={this.onError}
+            onSeeked={this.onSeeked}
+            onSeeking={this.onSeeking}
+            onStalled={this.audioEvent}
+            onSuspend={this.onsuspend}
+            onLoadeddata={this.audioEvent}
+            onCanplay={this.onCanPlay}
+            onCanplaythrough={this.audioEvent}
+            onWaiting={this.onWaiting}
           ></audio>
           <div class="book-cover">
             <img v-lazy={this.getCover(this.readingBook.coverUrl)} />
@@ -296,11 +295,12 @@ export default {
             <div class="progress-tip">{this.formatTime(this.currentTime)}</div>
             <div class="progress-container">
               <el-slider
-                vModel={this.currentTime}
+                modelValue={this.currentTime}
+                onUpdate:modelValue={val => { this.currentTime = val; }}
                 min={0}
                 max={this.audioDuration}
                 show-tooltip={false}
-                vOn:change={val => {
+                onChange={val => {
                   this.seekTime(val);
                 }}
               ></el-slider>
@@ -312,13 +312,19 @@ export default {
           <div class="book-operation">
             <i
               class="reader-iconfont reader-icon-jian15s"
-              vOn:click_stop_prevent={() => {
+              onClick={e => {
+                e.stopPropagation();
+                e.preventDefault();
                 this.seekTime(this.$refs.audio.currentTime - 15);
               }}
             ></i>
             <i
               class="reader-iconfont reader-icon-player-backward-step"
-              vOn:click_stop_prevent={this.prevChapter}
+              onClick={e => {
+                e.stopPropagation();
+                e.preventDefault();
+                this.prevChapter();
+              }}
             ></i>
             <i
               class={[
@@ -327,15 +333,25 @@ export default {
                   ? "reader-icon-player-play"
                   : "reader-icon-player-pause"
               ]}
-              vOn:click_stop_prevent={this.toggle}
+              onClick={e => {
+                e.stopPropagation();
+                e.preventDefault();
+                this.toggle();
+              }}
             ></i>
             <i
               class="reader-iconfont reader-icon-player-forward-step"
-              vOn:click_stop_prevent={this.nextChapter}
+              onClick={e => {
+                e.stopPropagation();
+                e.preventDefault();
+                this.nextChapter();
+              }}
             ></i>
             <i
               class="reader-iconfont reader-icon-15s"
-              vOn:click_stop_prevent={() => {
+              onClick={e => {
+                e.stopPropagation();
+                e.preventDefault();
                 this.seekTime(this.$refs.audio.currentTime + 15);
               }}
             ></i>
@@ -355,18 +371,21 @@ export default {
                     ? "reader-icon-volume"
                     : "reader-icon-volume-off"
                 ]}
-                vOn:click_stop_prevent={() => {
+                onClick={e => {
+                  e.stopPropagation();
+                  e.preventDefault();
                   this.setAudioVolume(this.audioVolume > 0 ? 0 : 100);
                 }}
                 style={{ marginRight: this.audioVolume > 0 ? "15px" : "25px" }}
               ></i>
               <el-slider
-                vModel={this.audioVolume}
+                modelValue={this.audioVolume}
+                onUpdate:modelValue={val => { this.audioVolume = val; }}
                 min={0}
                 max={100}
                 style={{ width: "180px" }}
                 show-tooltip={false}
-                vOn:change={val => {
+                onChange={val => {
                   this.setAudioVolume(val);
                 }}
               ></el-slider>
