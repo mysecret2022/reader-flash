@@ -10,6 +10,48 @@ import store from './plugins/vuex';
 import registerElementIcons from './plugins/icons';
 import noCover from './assets/imgs/noCover.jpeg';
 import noImage from './assets/imgs/noImage.png';
+import localforage from 'localforage';
+
+// 严格对齐 reader 原版架构，初始化全局 $cacheStorage 缓存实例，杜绝 getItem/setItem 未定义错误
+try {
+  window.$cacheStorage = localforage.createInstance({
+    name: "cacheStorage"
+  });
+} catch (e) {
+  console.warn("localforage init error:", e);
+}
+
+if (!window.$cacheStorage) {
+  window.$cacheStorage = {
+    getItem: async (k) => {
+      try {
+        const v = localStorage.getItem(k);
+        return v ? JSON.parse(v) : null;
+      } catch (e) {
+        return null;
+      }
+    },
+    setItem: async (k, v) => {
+      try {
+        localStorage.setItem(k, JSON.stringify(v));
+      } catch (e) {}
+    },
+    removeItem: async (k) => {
+      try {
+        localStorage.removeItem(k);
+      } catch (e) {}
+    },
+    iterate: async (cb) => {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        try {
+          const v = JSON.parse(localStorage.getItem(k));
+          cb(v, k);
+        } catch (e) {}
+      }
+    }
+  };
+}
 
 const app = createApp(App);
 const pinia = createPinia();

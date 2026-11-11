@@ -4,6 +4,7 @@ import vueJsx from '@vitejs/plugin-vue-jsx'
 import path from 'path'
 
 export default defineConfig({
+  base: './',
   plugins: [vue(), vueJsx()],
   resolve: {
     alias: {
@@ -19,10 +20,6 @@ export default defineConfig({
         target: 'http://127.0.0.1:8080',
         changeOrigin: true
       },
-      '/assets': {
-        target: 'http://127.0.0.1:8080',
-        changeOrigin: true
-      },
       '/epub': {
         target: 'http://127.0.0.1:8080',
         changeOrigin: true
@@ -31,7 +28,7 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    assetsDir: 'assets',
+    assetsDir: 'static',
     chunkSizeWarningLimit: 2500
   }
 })

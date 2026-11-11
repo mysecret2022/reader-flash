@@ -84,12 +84,43 @@ export const LimitResquest = function(limit, process) {
   return handler;
 };
 
+const getCacheStorage = () => {
+  if (typeof window !== "undefined" && window.$cacheStorage && typeof window.$cacheStorage.getItem === "function") {
+    return window.$cacheStorage;
+  }
+  return {
+    getItem: async (k) => {
+      try {
+        const v = typeof window !== "undefined" && window.localStorage ? window.localStorage.getItem(k) : null;
+        return v ? JSON.parse(v) : null;
+      } catch (e) {
+        return null;
+      }
+    },
+    setItem: async (k, v) => {
+      try {
+        if (typeof window !== "undefined" && window.localStorage) {
+          window.localStorage.setItem(k, JSON.stringify(v));
+        }
+      } catch (e) {}
+    },
+    removeItem: async (k) => {
+      try {
+        if (typeof window !== "undefined" && window.localStorage) {
+          window.localStorage.removeItem(k);
+        }
+      } catch (e) {}
+    },
+    iterate: async () => {}
+  };
+};
+
 export const networkFirstRequest = async function(requestFunc, cacheKey) {
   cacheKey = "localCache@" + cacheKey;
+  const storage = getCacheStorage();
   const res = await requestFunc().catch(() => {
     // 请求出错，使用缓存
-    // 使用新的异步存储
-    return window.$cacheStorage
+    return storage
       .getItem(cacheKey)
       .then(cacheResponse => {
         if (cacheResponse) {
@@ -106,8 +137,7 @@ export const networkFirstRequest = async function(requestFunc, cacheKey) {
       });
   });
   if (res && res.data && res.data.isSuccess) {
-    // 使用新的异步存储
-    window.$cacheStorage.setItem(cacheKey, res.data).catch(() => {});
+    storage.setItem(cacheKey, res.data).catch(() => {});
   }
   return res;
 };
@@ -118,15 +148,15 @@ export const cacheFirstRequest = async function(
   validateCache
 ) {
   cacheKey = "localCache@" + cacheKey;
+  const storage = getCacheStorage();
   // validateCache === true 时，直接刷新缓存
   if (validateCache !== true) {
-    let cacheResponse = await window.$cacheStorage
+    let cacheResponse = await storage
       .getItem(cacheKey)
       .then(cacheResponse => {
         if (cacheResponse) {
           return cacheResponse;
         }
-        // console.log("Cache not found in new cache");
         throw new Error("Cache not found");
       })
       .catch(() => {
@@ -142,8 +172,7 @@ export const cacheFirstRequest = async function(
   }
   const res = await requestFunc();
   if (res && res.data && res.data.isSuccess) {
-    // 使用新的异步存储
-    window.$cacheStorage.setItem(cacheKey, res.data).catch(() => {});
+    storage.setItem(cacheKey, res.data).catch(() => {});
   }
   return res;
 };

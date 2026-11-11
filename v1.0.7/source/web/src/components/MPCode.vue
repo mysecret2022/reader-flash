@@ -1,0 +1,53 @@
+<template>
+  <el-dialog
+    title="关注公众号【假装大佬】"
+    :model-value="actualShow" @update:model-value="onDialogVisibilityUpdate"
+    :width="dialogSmallWidth"
+    :top="dialogTop"
+    :fullscreen="$store.state.miniInterface"
+    :class="
+      isWebApp && !$store.getters.isNight ? 'status-bar-light-bg-dialog' : ''
+    "
+    :before-close="cancel"
+  >
+    <el-image
+      :src="mpcodeImg"
+      class="qrcode-img"
+      fit="cover"
+      lazy
+    />
+  </el-dialog>
+</template>
+
+<script>
+import { mapGetters } from "vuex";
+import mpcodeImg from "../assets/imgs/mpcode.jpg";
+
+export default {
+  model: {
+    prop: "show",
+    event: "setShow"
+  },
+  name: "ReplaceRuleForm",
+  data() {
+    return {
+      mpcodeImg
+    };
+  },
+  props: ["show", "value", "modelValue"],
+  computed: {
+    ...mapGetters(["dialogSmallWidth", "dialogTop"])
+  },
+  methods: {
+    cancel() {
+      this.$emit("setShow", false);
+    }
+  }
+};
+</script>
+<style lang="stylus" scoped>
+.qrcode-img {
+  display: block;
+  margin: 0 auto;
+}
+</style>
